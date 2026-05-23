@@ -199,7 +199,7 @@ async function saveItem() {
     currency:    document.getElementById('fCurrency').value,
     image:       document.getElementById('fImage').value.trim(),
   };
-
+  console.log(payload);
   let error;
   if (editingId) {
     ({ error } = await sb.from('merch').update(payload).eq('id', editingId));
