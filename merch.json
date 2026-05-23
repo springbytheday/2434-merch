@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1,
+    "name": "Sanrio",
+    "group": "Sakayori Soma",
+    "type": "Acrylic Stand",
+    "cost": 1650,
+    "currency": "JPY",
+    "status": "owned",
+    "image": "https://shop.nijisanji.jp/on/demandware.static/-/Sites-nijisanji-master-catalog/default/dw2c46afb4/physical/SSZS000068043_5.png",
+    "notes": "Sanrio Collab",
+    "dateAdded": "2026-05-22"
+  },
+  {
+    "id": 2,
+    "name": "Ichigo Mania",
+    "group": "Sakayori Soma",
+    "type": "Acrylic Stand",
+    "cost": 1800,
+    "currency": "JPY",
+    "status": "owned",
+    "image": "https://shop.nijisanji.jp/on/demandware.static/-/Sites-nijisanji-master-catalog/default/dw216adbe3/physical/SSZS000061003_4.png",
+    "notes": "",
+    "dateAdded": "2025-01-22"
+  },
+  {
+    "id": 3,
+    "name": "Twinkle Gift",
+    "group": "Nagisa Trout",
+    "type": "Acrylic Stand",
+    "cost": 1800,
+    "currency": "JPY",
+    "status": "owned",
+    "image": "https://shop.nijisanji.jp/on/demandware.static/-/Sites-nijisanji-master-catalog/default/dwb0c208db/physical/Twinkle%20Gifts_%E3%82%A2%E3%82%AF%E3%83%AA%E3%83%AB%E3%82%B9%E3%82%BF%E3%83%B3%E3%83%89/SSZS000054903_3.png",
+    "notes": "",
+    "dateAdded": "2025-03-05"
+  },
+    {
+    "id": 4,
+    "name": "1st Anniversary",
+    "group": "Nagisa Trout",
+    "type": "Acrylic Stand",
+    "cost": 1800,
+    "currency": "JPY",
+    "status": "wishlist",
+    "image": "https://shop.nijisanji.jp/on/demandware.static/-/Sites-nijisanji-master-catalog/default/dw82558c36/physical/SSZS000048786_6.png",
+    "notes": "",
+    "dateAdded": "2025-03-05"
+  }
+]
