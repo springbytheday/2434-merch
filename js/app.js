@@ -141,8 +141,7 @@ async function loadAll() {
   // Load catalogue
   const { data: items, error: e1 } = await sb
     .from('merch')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .select('*');
 
   if (e1) { toast('Failed to load merch: ' + e1.message, true); return; }
   allItems = items || [];
@@ -187,19 +186,17 @@ async function cycleStatus(itemId) {
 
 /* ── Add / edit item (superuser only) ────────────────── */
 async function saveItem() {
-  const name = document.getElementById('fName').value.trim();
-  if (!name) { document.getElementById('fName').focus(); return; }
+  const series = document.getElementById('fSeries').value.trim();
+  if (!series) { document.getElementById('fSeries').focus(); return; }
 
   setSaveLoading(true);
 
   const payload = {
-    name,
-    group_name:  document.getElementById('fGroup').value.trim(),
+    series,
+    liver:  document.getElementById('fLiver').value.trim(),
     type:        document.getElementById('fType').value,
-    edition:     document.getElementById('fEdition').value.trim(),
     cost:        parseFloat(document.getElementById('fCost').value) || 0,
     currency:    document.getElementById('fCurrency').value,
-    notes:       document.getElementById('fNotes').value.trim(),
     image:       document.getElementById('fImage').value.trim(),
   };
 
@@ -261,7 +258,7 @@ function importJson(file) {
    ══════════════════════════════════════════════════════ */
 function render() {
   updateStats();
-  updateGroupFilter();
+  updateLiverFilter();
   const filtered = getFiltered();
   if (currentView === 'grid') renderGrid(filtered);
   else renderTable(filtered);
@@ -271,49 +268,34 @@ function getFiltered() {
   const q           = document.getElementById('searchInput').value.toLowerCase();
   const statusFilter = document.getElementById('statusFilter').value;
   const typeFilter   = document.getElementById('typeFilter').value;
-  const groupFilter  = document.getElementById('groupFilter').value;
+  const liverFilter  = document.getElementById('liverFilter').value;
 
   return allItems.filter(item => {
     const myStatus = userStatuses[item.id] || 'none';
-    const matchQ      = !q || item.name.toLowerCase().includes(q)
-                          || (item.group_name || '').toLowerCase().includes(q)
+    const matchQ      = !q || item.series.toLowerCase().includes(q)
+                          || (item.liver || '').toLowerCase().includes(q)
                           || (item.notes || '').toLowerCase().includes(q);
     const matchStatus = !statusFilter || myStatus === statusFilter;
     const matchType   = !typeFilter || item.type === typeFilter;
-    const matchGroup  = !groupFilter || item.group_name === groupFilter;
-    return matchQ && matchStatus && matchType && matchGroup;
+    const matchLiver  = !liverFilter || item.liver === liverFilter;
+    return matchQ && matchStatus && matchType && matchLiver;
   });
 }
 
 function updateStats() {
   const myOwned    = allItems.filter(i => userStatuses[i.id] === 'owned');
   const myWishlist = allItems.filter(i => userStatuses[i.id] === 'wishlist');
-  const groups     = new Set(allItems.map(i => i.group_name).filter(Boolean));
 
   document.getElementById('statTotal').textContent    = allItems.length;
   document.getElementById('statOwned').textContent    = myOwned.length;
   document.getElementById('statWishlist').textContent = myWishlist.length;
-  document.getElementById('statGroups').textContent   = groups.size;
 
-  // Spending by currency for owned items
-  const byCurrency = {};
-  myOwned.forEach(i => {
-    if (!i.cost) return;
-    const c = i.currency || 'JPY';
-    byCurrency[c] = (byCurrency[c] || 0) + parseFloat(i.cost);
-  });
-  const spentStr = Object.entries(byCurrency)
-    .map(([c, v]) => `${fmtNum(v)} ${c}`)
-    .join(' / ');
-  document.getElementById('statSpent').textContent = spentStr || '—';
-}
-
-function updateGroupFilter() {
-  const gf   = document.getElementById('groupFilter');
+function updateLiverFilter() {
+  const gf   = document.getElementById('liverFilter');
   const prev = gf.value;
-  const groups = [...new Set(allItems.map(i => i.group_name).filter(Boolean))].sort();
-  gf.innerHTML = '<option value="">All groups</option>';
-  groups.forEach(g => {
+  const livers = [...new Set(allItems.map(i => i.liver).filter(Boolean))].sort();
+  gf.innerHTML = '<option value="">All livers</option>';
+  livers.forEach(g => {
     const o = document.createElement('option');
     o.value = g; o.textContent = g;
     if (g === prev) o.selected = true;
@@ -365,11 +347,9 @@ function createCard(item) {
         <span class="badge badge-${myStatus === 'none' ? 'none' : myStatus}">${myStatus === 'owned' ? '✓ Owned' : myStatus === 'wishlist' ? '♡ Wishlist' : '— Untracked'}</span>
         <span class="badge badge-type">${item.type}</span>
       </div>
-      <div class="card-name">${item.name}</div>
-      ${item.group_name ? `<div class="card-group">${item.group_name}</div>` : ''}
-      ${item.edition ? `<div class="card-group" style="font-style:italic">${item.edition}</div>` : ''}
+      <div class="card-name">${item.series}</div>
+      ${item.liver ? `<div class="card-group">${item.liver}</div>` : ''}
       ${item.cost ? `<div class="card-cost">${fmtNum(item.cost)} ${item.currency || 'JPY'}</div>` : ''}
-      ${item.notes ? `<div class="card-notes">${item.notes}</div>` : ''}
     </div>
     <button class="status-toggle ${toggleClass}" onclick="cycleStatus(${item.id})">
       ${statusLabel} <span style="font-size:.7rem;opacity:.7">· click to cycle</span>
@@ -394,7 +374,7 @@ function renderTable(items) {
     <table>
       <thead>
         <tr>
-          <th></th><th>Name</th><th>Group</th><th>Type</th>
+          <th></th><th>Name</th><th>Liver</th><th>Type</th>
           <th>My Status</th><th>Cost</th><th>Notes</th>
           ${isSuperuser ? '<th></th>' : ''}
         </tr>
@@ -409,8 +389,8 @@ function renderTable(items) {
               ? `<img class="table-thumb" src="${item.image}" alt="">`
               : `<div class="table-thumb-placeholder">?</div>`}
             </td>
-            <td><strong>${item.name}</strong>${item.edition ? `<br><span style="font-size:.75rem;color:var(--muted);font-style:italic">${item.edition}</span>` : ''}</td>
-            <td>${item.group_name || '—'}</td>
+            <td><strong>${item.series}</strong></td>
+            <td>${item.liver || '—'}</td>
             <td><span class="badge badge-type">${item.type}</span></td>
             <td>
               <button class="status-toggle ${toggleClass}" style="border-radius:999px;padding:.2rem .7rem;font-size:.72rem;width:auto"
@@ -419,7 +399,6 @@ function renderTable(items) {
               </button>
             </td>
             <td style="white-space:nowrap">${item.cost ? `${fmtNum(item.cost)} ${item.currency || 'JPY'}` : '—'}</td>
-            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:.8rem">${item.notes || '—'}</td>
             ${isSuperuser ? `<td style="white-space:nowrap">
               <button class="btn btn-ghost btn-sm" onclick="openEdit(${item.id})">Edit</button>
               <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">Delete</button>
@@ -447,13 +426,11 @@ function openEdit(id) {
   editingId = id;
   document.getElementById('modalTitle').textContent = 'Edit Merch';
   document.getElementById('fImage').value    = item.image    || '';
-  document.getElementById('fName').value     = item.name     || '';
-  document.getElementById('fGroup').value    = item.group_name || '';
+  document.getElementById('fSeries').value     = item.series     || '';
+  document.getElementById('fliver').value    = item.liver || '';
   document.getElementById('fType').value     = item.type     || '';
-  document.getElementById('fEdition').value  = item.edition  || '';
   document.getElementById('fCost').value     = item.cost     || '';
   document.getElementById('fCurrency').value = item.currency || 'JPY';
-  document.getElementById('fNotes').value    = item.notes    || '';
   document.getElementById('modalOverlay').classList.add('open');
 }
 
@@ -538,7 +515,7 @@ function bindEvents() {
   document.getElementById('searchInput').addEventListener('input', render);
   document.getElementById('statusFilter').addEventListener('change', render);
   document.getElementById('typeFilter').addEventListener('change', render);
-  document.getElementById('groupFilter').addEventListener('change', render);
+  document.getElementById('liverFilter').addEventListener('change', render);
   document.getElementById('modalOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeModal();
   });

@@ -1,215 +1,233 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Merch Archive</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
 
-<!-- ── Loading screen ─────────────────────────────────── -->
-<div class="loading-screen" id="loadingScreen">
-  <div class="spinner"></div>
-  <span>Loading…</span>
-</div>
+  <!-- ── Loading screen ─────────────────────────────────── -->
+  <div class="loading-screen" id="loadingScreen">
+    <div class="spinner"></div>
+    <span>Loading…</span>
+  </div>
 
-<!-- ── Auth page ──────────────────────────────────────── -->
-<div class="auth-page" id="authPage" style="display:none">
-  <div class="auth-card">
-    <div class="auth-logo">Merch<span>Archive</span></div>
-    <div class="auth-subtitle">Track your vtuber merchandise</div>
+  <!-- ── Auth page ──────────────────────────────────────── -->
+  <div class="auth-page" id="authPage" style="display:none">
+    <div class="auth-card">
+      <div class="auth-logo">Merch<span>Archive</span></div>
+      <div class="auth-subtitle">Track your vtuber merchandise</div>
 
-    <div class="auth-tabs">
-      <button class="auth-tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
-      <button class="auth-tab" id="tabSignup" onclick="switchTab('signup')">Create Account</button>
-    </div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
+        <button class="auth-tab" id="tabSignup" onclick="switchTab('signup')">Create Account</button>
+      </div>
 
-    <div id="authMessage"></div>
+      <div id="authMessage"></div>
 
-    <!-- Login form -->
-    <div id="formLogin">
-      <div class="form-group" style="margin-bottom:1rem">
-        <label for="loginUsername">Username</label>
-        <input type="text" id="loginUsername" placeholder="your username" autocomplete="username">
+      <!-- Login form -->
+      <div id="formLogin">
+        <div class="form-group" style="margin-bottom:1rem">
+          <label for="loginUsername">Username</label>
+          <input type="text" id="loginUsername" placeholder="your username" autocomplete="username">
+        </div>
+        <div class="form-group" style="margin-bottom:1.25rem">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary btn-full" id="loginBtn" onclick="handleLogin()">Sign In</button>
       </div>
-      <div class="form-group" style="margin-bottom:1.25rem">
-        <label for="loginPassword">Password</label>
-        <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
-      </div>
-      <button class="btn btn-primary btn-full" id="loginBtn" onclick="handleLogin()">Sign In</button>
-    </div>
 
-    <!-- Signup form -->
-    <div id="formSignup" style="display:none">
-      <div class="form-group" style="margin-bottom:1rem">
-        <label for="signupUsername">Username</label>
-        <input type="text" id="signupUsername" placeholder="letters, numbers, underscores" autocomplete="username">
+      <!-- Signup form -->
+      <div id="formSignup" style="display:none">
+        <div class="form-group" style="margin-bottom:1rem">
+          <label for="signupUsername">Username</label>
+          <input type="text" id="signupUsername" placeholder="letters, numbers, underscores" autocomplete="username">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem">
+          <label for="signupPassword">Password</label>
+          <input type="password" id="signupPassword" placeholder="Min. 6 characters" autocomplete="new-password">
+        </div>
+        <div class="form-group" style="margin-bottom:1.25rem">
+          <label for="signupConfirm">Confirm Password</label>
+          <input type="password" id="signupConfirm" placeholder="••••••••" autocomplete="new-password">
+        </div>
+        <button class="btn btn-primary btn-full" id="signupBtn" onclick="handleSignup()">Create Account</button>
       </div>
-      <div class="form-group" style="margin-bottom:1rem">
-        <label for="signupPassword">Password</label>
-        <input type="password" id="signupPassword" placeholder="Min. 6 characters" autocomplete="new-password">
-      </div>
-      <div class="form-group" style="margin-bottom:1.25rem">
-        <label for="signupConfirm">Confirm Password</label>
-        <input type="password" id="signupConfirm" placeholder="••••••••" autocomplete="new-password">
-      </div>
-      <button class="btn btn-primary btn-full" id="signupBtn" onclick="handleSignup()">Create Account</button>
     </div>
   </div>
-</div>
 
-<!-- ── Main app ────────────────────────────────────────── -->
-<div id="appPage" style="display:none">
+  <!-- ── Main app ────────────────────────────────────────── -->
+  <div id="appPage" style="display:none">
 
-  <header class="site-header">
-    <span class="logo">Merch<span>Archive</span></span>
-    <div class="header-actions">
-      <div class="header-user">
-        <span id="headerEmail"></span>
-        <span class="superuser-badge" id="superBadge" style="display:none">Owner</span>
-      </div>
-      <!-- Superuser only -->
-      <button class="btn btn-ghost" id="btnImport" style="display:none" onclick="document.getElementById('importFileInput').click()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        Import
-      </button>
-      <input type="file" id="importFileInput" accept=".json" style="display:none">
-      <button class="btn btn-ghost" id="btnExport" style="display:none" onclick="exportJson()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Export
-      </button>
-      <button class="btn btn-primary" id="btnAdd" style="display:none" onclick="openAdd()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Add Item
-      </button>
-      <button class="btn btn-ghost btn-sm" onclick="handleLogout()">Sign out</button>
-    </div>
-  </header>
-
-  <main>
-    <!-- Stats -->
-    <div class="stats">
-      <div class="stat-item">
-        <span class="stat-label">Total Items</span>
-        <span class="stat-value" id="statTotal">—</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">My Owned</span>
-        <span class="stat-value" id="statOwned">—</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">My Wishlist</span>
-        <span class="stat-value" id="statWishlist">—</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Groups</span>
-        <span class="stat-value" id="statGroups">—</span>
-      </div>
-      <div class="stat-item" style="flex:2">
-        <span class="stat-label">My Total Spent</span>
-        <span class="stat-value" style="font-size:1.1rem;padding-top:.2rem" id="statSpent">—</span>
-      </div>
-    </div>
-
-    <!-- Controls -->
-    <div class="controls">
-      <div class="search-wrap">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="searchInput" class="search-input" placeholder="Search by name, group, notes…">
-      </div>
-      <select id="statusFilter" class="filter-select">
-        <option value="">All statuses</option>
-        <option value="owned">My Owned</option>
-        <option value="wishlist">My Wishlist</option>
-        <option value="none">Not tracked</option>
-      </select>
-      <select id="typeFilter" class="filter-select">
-        <option value="">All types</option>
-      </select>
-      <select id="groupFilter" class="filter-select">
-        <option value="">All groups</option>
-      </select>
-      <div class="view-toggle">
-        <button class="view-btn active" id="viewGrid" onclick="setView('grid')" title="Grid view">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    <header class="site-header">
+      <span class="logo">Merch<span>Archive</span></span>
+      <div class="header-actions">
+        <div class="header-user">
+          <span id="headerEmail"></span>
+          <span class="superuser-badge" id="superBadge" style="display:none">Owner</span>
+        </div>
+        <!-- Superuser only -->
+        <button class="btn btn-ghost" id="btnImport" style="display:none"
+          onclick="document.getElementById('importFileInput').click()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          Import
         </button>
-        <button class="view-btn" id="viewTable" onclick="setView('table')" title="Table view">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <input type="file" id="importFileInput" accept=".json" style="display:none">
+        <button class="btn btn-ghost" id="btnExport" style="display:none" onclick="exportJson()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Export
+        </button>
+        <button class="btn btn-primary" id="btnAdd" style="display:none" onclick="openAdd()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Item
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="handleLogout()">Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Stats -->
+      <div class="stats">
+        <div class="stat-item">
+          <span class="stat-label">Total Items</span>
+          <span class="stat-value" id="statTotal">—</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">My Owned</span>
+          <span class="stat-value" id="statOwned">—</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">My Wishlist</span>
+          <span class="stat-value" id="statWishlist">—</span>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="controls">
+        <div class="search-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input type="text" id="searchInput" class="search-input" placeholder="Search by name, group, notes…">
+        </div>
+        <select id="statusFilter" class="filter-select">
+          <option value="">All statuses</option>
+          <option value="owned">My Owned</option>
+          <option value="wishlist">My Wishlist</option>
+          <option value="none">Not tracked</option>
+        </select>
+        <select id="typeFilter" class="filter-select">
+          <option value="">All types</option>
+        </select>
+        <select id="liverFilter" class="filter-select">
+          <option value="">All livers</option>
+        </select>
+        <div class="view-toggle">
+          <button class="view-btn active" id="viewGrid" onclick="setView('grid')" title="Grid view">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+            </svg>
+          </button>
+          <button class="view-btn" id="viewTable" onclick="setView('table')" title="Table view">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <!-- ── Add / Edit Modal (superuser only) ──────────────── -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="modalTitle">Add Merch</span>
+        <button class="modal-close" onclick="closeModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
         </button>
       </div>
-    </div>
-
-    <!-- Content -->
-    <div id="content"></div>
-  </main>
-</div>
-
-<!-- ── Add / Edit Modal (superuser only) ──────────────── -->
-<div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title" id="modalTitle">Add Merch</span>
-      <button class="modal-close" onclick="closeModal()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-    <div class="modal-body">
-      <form id="merch-form" onsubmit="return false">
-        <div class="form-group">
-          <label>Image URL or relative path</label>
-          <input type="text" id="fImage" placeholder="./images/suisei-acrylic.jpg or https://…">
-          <div style="font-size:.72rem;color:var(--muted);margin-top:.25rem">Put images in the <code>images/</code> folder and reference as <code>./images/filename.jpg</code></div>
-        </div>
-        <div class="form-row">
+      <div class="modal-body">
+        <form id="merch-form" onsubmit="return false">
           <div class="form-group">
-            <label for="fName">Vtuber Name *</label>
-            <input type="text" id="fName" placeholder="e.g. Hoshimachi Suisei" required>
+            <label>Image URL or relative path</label>
+            <input type="text" id="fImage" placeholder="./images/suisei-acrylic.jpg or https://…">
+            <div style="font-size:.72rem;color:var(--muted);margin-top:.25rem">Put images in the <code>images/</code>
+              folder and reference as <code>./images/filename.jpg</code></div>
           </div>
-          <div class="form-group">
-            <label for="fGroup">Group / Agency</label>
-            <input type="text" id="fGroup" placeholder="e.g. Hololive">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="fSeries">Series Name*</label>
+              <input type="text" id="fSeries" placeholder="e.g. Debut" required>
+            </div>
+            <div class="form-group">
+              <label for="fLiver">Speciale Member</label>
+              <input type="text" id="fLiver" placeholder="e.g. Sakayori Soma">
+            </div>
           </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="fType">Item Type</label>
-            <select id="fType" class="form-select"></select>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="fType">Item Type</label>
+              <select id="fType" class="form-select"></select>
+            </div>
           </div>
-          <div class="form-group">
-            <label for="fEdition">Edition / Series</label>
-            <input type="text" id="fEdition" placeholder="e.g. 3rd Anniversary">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="fCost">Cost</label>
+              <input type="number" id="fCost" placeholder="0" min="0" step="any">
+            </div>
+            <div class="form-group">
+              <label for="fCurrency">Currency</label>
+              <select id="fCurrency" class="form-select"></select>
+            </div>
           </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="fCost">Cost</label>
-            <input type="number" id="fCost" placeholder="0" min="0" step="any">
-          </div>
-          <div class="form-group">
-            <label for="fCurrency">Currency</label>
-            <select id="fCurrency" class="form-select"></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="fNotes">Notes / Condition</label>
-          <textarea id="fNotes" placeholder="e.g. Mint condition, limited edition, signed…"></textarea>
-        </div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" id="saveBtn" onclick="saveItem()">Save</button>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" id="saveBtn" onclick="saveItem()">Save</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- ── Toast container ─────────────────────────────────── -->
-<div class="toast-container" id="toastContainer"></div>
+  <!-- ── Toast container ─────────────────────────────────── -->
+  <div class="toast-container" id="toastContainer"></div>
 
-<!-- ── Supabase SDK ────────────────────────────────────── -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js"></script>
-<script src="js/app.js"></script>
+  <!-- ── Supabase SDK ────────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
 </body>
+
 </html>
