@@ -428,7 +428,7 @@ function openEdit(id) {
   document.getElementById('modalTitle').textContent = 'Edit Merch';
   document.getElementById('fImage').value    = item.image    || '';
   document.getElementById('fSeries').value     = item.series     || '';
-  document.getElementById('fliver').value    = item.liver || '';
+  document.getElementById('fLiver').value    = item.liver || '';
   document.getElementById('fType').value     = item.type     || '';
   document.getElementById('fCost').value     = item.cost     || '';
   document.getElementById('fCurrency').value = item.currency || 'JPY';
