@@ -283,12 +283,13 @@ function getFiltered() {
 }
 
 function updateStats() {
-  const myOwned    = allItems.filter(i => userStatuses[i.id] === 'owned');
+  const myOwned = allItems.filter(i => userStatuses[i.id] === 'owned');
   const myWishlist = allItems.filter(i => userStatuses[i.id] === 'wishlist');
 
-  document.getElementById('statTotal').textContent    = allItems.length;
-  document.getElementById('statOwned').textContent    = myOwned.length;
+  document.getElementById('statTotal').textContent = allItems.length;
+  document.getElementById('statOwned').textContent = myOwned.length;
   document.getElementById('statWishlist').textContent = myWishlist.length;
+}
 
 function updateLiverFilter() {
   const gf   = document.getElementById('liverFilter');
