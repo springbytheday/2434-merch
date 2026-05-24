@@ -1,52 +1,57 @@
 /* ═══════════════════════════════════════════════════════
    Merch Archive — app.js
-   Supabase-backed multi-user merch tracker
+   Public browsing + optional login for status tracking
    ═══════════════════════════════════════════════════════ */
 
 /* ── Supabase client ──────────────────────────────────── */
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 /* ── App state ────────────────────────────────────────── */
-let currentUser   = null;
-let isSuperuser   = false;
-let allItems      = [];       // rows from `merch` table
-let userStatuses  = {};       // { merch_id: 'owned'|'wishlist' }
-let editingId     = null;
-let currentView   = 'grid';
+let currentUser  = null;   // null = logged out (guest)
+let isSuperuser  = false;
+let allItems     = [];
+let userStatuses = {};     // only populated when logged in
+let editingId    = null;
+let currentView  = 'grid';
 
-const TYPE_OPTIONS     = ['Acrylic Stand','Cheki Card','Plushie','Tapestry','Keychain','Can Badge','Trading Card','Voice Pack','Other'];
+const TYPE_OPTIONS     = ['Acrylic Stand','Cheki Card','Plushie','Tapestry','Keychain','Pin Badge','Trading Card','Fan Book','Voice Pack','Other'];
 const CURRENCY_OPTIONS = ['JPY','USD','EUR','GBP','AUD','CAD','SGD','TWD','KRW'];
 
 /* ══════════════════════════════════════════════════════
-   BOOTSTRAP
+   BOOTSTRAP — load merch immediately, auth is optional
    ══════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   populateSelects();
   bindEvents();
 
-  // Check for existing session
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    await onSignedIn(session.user);
-  } else {
-    showScreen('auth');
-  }
+  // Always load the catalogue — no login required
+  await loadMerch();
 
-  // Listen for auth changes (e.g. email confirmation redirects)
+  // Check if already logged in
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) await onSignedIn(session.user);
+  else onSignedOut();
+
+  // React to future auth changes
   sb.auth.onAuthStateChange(async (_event, session) => {
-    if (session) {
-      await onSignedIn(session.user);
-    } else {
-      currentUser = null;
-      isSuperuser = false;
-      showScreen('auth');
-    }
+    if (session) await onSignedIn(session.user);
+    else onSignedOut();
   });
 });
 
 /* ══════════════════════════════════════════════════════
    AUTH
    ══════════════════════════════════════════════════════ */
+function openAuthModal(tab = 'login') {
+  switchTab(tab);
+  clearAuthMessage();
+  document.getElementById('authOverlay').classList.add('open');
+}
+
+function closeAuthModal() {
+  document.getElementById('authOverlay').classList.remove('open');
+}
+
 function switchTab(tab) {
   document.getElementById('formLogin').style.display  = tab === 'login'  ? '' : 'none';
   document.getElementById('formSignup').style.display = tab === 'signup' ? '' : 'none';
@@ -55,7 +60,6 @@ function switchTab(tab) {
   clearAuthMessage();
 }
 
-// Convert a username to a fake internal email Supabase accepts
 function usernameToEmail(username) {
   return username.toLowerCase() + '@speciale.co';
 }
@@ -64,7 +68,7 @@ function validateUsername(username) {
   if (!username) return 'Please enter a username.';
   if (username.length < 3) return 'Username must be at least 3 characters.';
   if (username.length > 30) return 'Username must be 30 characters or fewer.';
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) return 'Username can only contain letters, numbers, and underscores.';
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) return 'Only letters, numbers, and underscores allowed.';
   return null;
 }
 
@@ -75,17 +79,15 @@ async function handleLogin() {
 
   setAuthLoading('loginBtn', true);
   const { error } = await sb.auth.signInWithPassword({
-    email: usernameToEmail(username),
-    password,
+    email: usernameToEmail(username), password,
   });
   setAuthLoading('loginBtn', false);
 
   if (error) {
-    // Translate Supabase's email-specific error messages into username-friendly ones
     if (error.message.includes('Invalid login')) showAuthError('Incorrect username or password.');
     else showAuthError(error.message);
   }
-  // success is handled by onAuthStateChange
+  // success → onAuthStateChange → onSignedIn → closeAuthModal
 }
 
 async function handleSignup() {
@@ -93,8 +95,8 @@ async function handleSignup() {
   const password = document.getElementById('signupPassword').value;
   const confirm  = document.getElementById('signupConfirm').value;
 
-  const usernameError = validateUsername(username);
-  if (usernameError) return showAuthError(usernameError);
+  const err = validateUsername(username);
+  if (err) return showAuthError(err);
   if (!password) return showAuthError('Please enter a password.');
   if (password !== confirm) return showAuthError('Passwords do not match.');
   if (password.length < 6) return showAuthError('Password must be at least 6 characters.');
@@ -103,9 +105,7 @@ async function handleSignup() {
   const { error } = await sb.auth.signUp({
     email: usernameToEmail(username),
     password,
-    options: {
-      data: { username }, // store the display username in user metadata
-    },
+    options: { data: { username } },
   });
   setAuthLoading('signupBtn', false);
 
@@ -121,110 +121,117 @@ async function handleSignup() {
 
 async function handleLogout() {
   await sb.auth.signOut();
+  // onAuthStateChange → onSignedOut handles the rest
 }
 
 async function onSignedIn(user) {
   currentUser = user;
-  // username is stored in metadata; fall back to stripping the fake domain from email
   currentUser.username = user.user_metadata?.username
     || user.email.replace('@speciale.co', '');
   isSuperuser = user.email === usernameToEmail(SUPERUSER_USERNAME);
-  await loadAll();
-  applyPermissions();
-  showScreen('app');
+
+  await loadUserStatuses();
+  applyHeaderLoggedIn();
+  closeAuthModal();
+  render();
+}
+
+function onSignedOut() {
+  currentUser  = null;
+  isSuperuser  = false;
+  userStatuses = {};
+  applyHeaderLoggedOut();
+  render();
 }
 
 /* ══════════════════════════════════════════════════════
-   DATA — MERCH (superuser read/write, all users read)
+   DATA
    ══════════════════════════════════════════════════════ */
-async function loadAll() {
-  // Load catalogue
-  const { data: items, error: e1 } = await sb
+async function loadMerch() {
+  const { data, error } = await sb
     .from('merch')
     .select('*');
 
-  if (e1) { toast('Failed to load merch: ' + e1.message, true); return; }
-  allItems = items || [];
+  if (error) { toast('Failed to load merch: ' + error.message, true); return; }
+  allItems = data || [];
 
-  // Load this user's statuses
-  const { data: statuses, error: e2 } = await sb
+  // Show the app now — user can browse immediately
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('appPage').style.display = '';
+  render();
+}
+
+async function loadUserStatuses() {
+  if (!currentUser) return;
+  const { data, error } = await sb
     .from('user_statuses')
     .select('merch_id, status')
     .eq('user_id', currentUser.id);
 
-  if (e2) { toast('Failed to load your statuses: ' + e2.message, true); return; }
+  if (error) { toast('Failed to load your statuses', true); return; }
   userStatuses = {};
-  (statuses || []).forEach(s => { userStatuses[s.merch_id] = s.status; });
-
-  render();
+  (data || []).forEach(s => { userStatuses[s.merch_id] = s.status; });
 }
 
-/* ── Toggle owned / wishlist (all users) ──────────────── */
+/* ── Status toggle — requires login ──────────────────── */
 async function cycleStatus(itemId) {
-  const current = userStatuses[itemId] || 'none';
-  const next = current === 'none' ? 'owned' : current === 'owned' ? 'wishlist' : 'none';
+  if (!currentUser) {
+    openAuthModal('login');
+    return;
+  }
 
-  // Optimistic UI update
+  const current = userStatuses[itemId] || 'none';
+  const next    = current === 'none' ? 'owned' : current === 'owned' ? 'wishlist' : 'none';
+
+  // Optimistic update
   userStatuses[itemId] = next;
   render();
 
-  if (next === 'none') {
-    const { error } = await sb
-      .from('user_statuses')
-      .delete()
-      .eq('user_id', currentUser.id)
-      .eq('merch_id', itemId);
-    if (error) { toast('Error updating status', true); await loadAll(); }
-  } else {
-    const { error } = await sb
-      .from('user_statuses')
-      .upsert({ user_id: currentUser.id, merch_id: itemId, status: next },
-               { onConflict: 'user_id,merch_id' });
-    if (error) { toast('Error updating status', true); await loadAll(); }
-  }
+  const { error } = next === 'none'
+    ? await sb.from('user_statuses').delete()
+        .eq('user_id', currentUser.id).eq('merch_id', itemId)
+    : await sb.from('user_statuses').upsert(
+        { user_id: currentUser.id, merch_id: itemId, status: next },
+        { onConflict: 'user_id,merch_id' }
+      );
+
+  if (error) { toast('Error saving status', true); await loadUserStatuses(); render(); }
 }
 
-/* ── Add / edit item (superuser only) ────────────────── */
+/* ── Superuser: add / edit / delete ──────────────────── */
 async function saveItem() {
   const series = document.getElementById('fSeries').value.trim();
   if (!series) { document.getElementById('fSeries').focus(); return; }
-
   setSaveLoading(true);
-
   const payload = {
-    series,
-    liver:  document.getElementById('fLiver').value.trim(),
-    type:        document.getElementById('fType').value,
-    cost:        parseFloat(document.getElementById('fCost').value) || 0,
-    currency:    document.getElementById('fCurrency').value,
-    image:       document.getElementById('fImage').value.trim(),
+    series:    series,
+    liver:   document.getElementById('fLiver').value.trim(),
+    type:     document.getElementById('fType').value,
+    cost:     parseFloat(document.getElementById('fCost').value) || 0,
+    currency: document.getElementById('fCurrency').value,
+    image:    document.getElementById('fImage').value.trim(),
   };
-  console.log(payload);
-  let error;
-  if (editingId) {
-    ({ error } = await sb.from('merch').update(payload).eq('id', editingId));
-  } else {
-    ({ error } = await sb.from('merch').insert(payload));
-  }
+
+  const { error } = editingId
+    ? await sb.from('merch').update(payload).eq('id', editingId)
+    : await sb.from('merch').insert(payload);
 
   setSaveLoading(false);
   if (error) { toast('Save failed: ' + error.message, true); return; }
 
   toast(editingId ? 'Item updated' : 'Item added');
   closeModal();
-  await loadAll();
+  await loadMerch();
 }
 
-/* ── Delete item (superuser only) ─────────────────────── */
 async function deleteItem(id) {
   if (!confirm('Delete this item? This cannot be undone.')) return;
   const { error } = await sb.from('merch').delete().eq('id', id);
   if (error) { toast('Delete failed: ' + error.message, true); return; }
   toast('Item deleted');
-  await loadAll();
+  await loadMerch();
 }
 
-/* ── Export JSON ──────────────────────────────────────── */
 function exportJson() {
   const blob = new Blob([JSON.stringify(allItems, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -234,17 +241,15 @@ function exportJson() {
   toast('Exported merch.json');
 }
 
-/* ── Import JSON (superuser only) ─────────────────────── */
 function importJson(file) {
   const reader = new FileReader();
   reader.onload = async e => {
     try {
       const data = JSON.parse(e.target.result);
       if (!Array.isArray(data)) throw new Error();
-      // Upsert all rows
       const { error } = await sb.from('merch').upsert(data);
       if (error) throw error;
-      await loadAll();
+      await loadMerch();
       toast(`Imported ${data.length} items`);
     } catch (err) {
       toast('Import failed: ' + (err.message || 'Invalid file'), true);
@@ -272,23 +277,31 @@ function getFiltered() {
 
   return allItems.filter(item => {
     const myStatus = userStatuses[item.id] || 'none';
-    const matchQ      = !q || item.series.toLowerCase().includes(q)
-                          || (item.liver || '').toLowerCase().includes(q)
-                          || (item.notes || '').toLowerCase().includes(q);
+    const matchQ      = !q || (item.liver||'').toLowerCase().includes(q)
+                          || (item.series||'').toLowerCase().includes(q)
+                          || (item.notes||'').toLowerCase().includes(q);
     const matchStatus = !statusFilter || myStatus === statusFilter;
     const matchType   = !typeFilter || item.type === typeFilter;
-    const matchLiver  = !liverFilter || item.liver === liverFilter;
+    const matchLiver  = !liverFilter || item.series === liverFilter;
     return matchQ && matchStatus && matchType && matchLiver;
   });
 }
 
 function updateStats() {
-  const myOwned = allItems.filter(i => userStatuses[i.id] === 'owned');
-  const myWishlist = allItems.filter(i => userStatuses[i.id] === 'wishlist');
+  document.getElementById('statTotal').textContent  = allItems.length;
 
-  document.getElementById('statTotal').textContent = allItems.length;
-  document.getElementById('statOwned').textContent = myOwned.length;
-  document.getElementById('statWishlist').textContent = myWishlist.length;
+  const loggedIn = !!currentUser;
+  // Show personal stats only when logged in
+  document.getElementById('statOwnedWrap').style.display   = loggedIn ? '' : 'none';
+  document.getElementById('statWishlistWrap').style.display = loggedIn ? '' : 'none';
+
+  if (loggedIn) {
+    const myOwned    = allItems.filter(i => userStatuses[i.id] === 'owned');
+    const myWishlist = allItems.filter(i => userStatuses[i.id] === 'wishlist');
+    document.getElementById('statOwned').textContent    = myOwned.length;
+    document.getElementById('statWishlist').textContent = myWishlist.length;
+
+  }
 }
 
 function updateLiverFilter() {
@@ -312,7 +325,7 @@ function renderGrid(items) {
   grid.className = 'grid';
 
   if (!items.length) {
-    grid.innerHTML = `<div class="empty-state"><p>No items found</p><p>Try adjusting your filters${isSuperuser ? ' or add a new item' : ''}.</p></div>`;
+    grid.innerHTML = `<div class="empty-state"><p>No items found</p><p>Try adjusting your filters.</p></div>`;
   } else {
     items.forEach(item => grid.appendChild(createCard(item)));
   }
@@ -320,19 +333,28 @@ function renderGrid(items) {
 }
 
 function createCard(item) {
-  const myStatus = userStatuses[item.id] || 'none';
-  const card = document.createElement('div');
-  card.className = 'card';
+  const myStatus   = userStatuses[item.id] || 'none';
+  const loggedIn   = !!currentUser;
+  const card       = document.createElement('div');
+  card.className   = 'card';
 
   const imgHtml = item.image
-    ? `<img class="card-image" src="${item.image}" alt="${item.name}" loading="lazy">`
+    ? `<img class="card-image" src="${item.image}" alt="${item.liver}" loading="lazy">`
     : `<div class="card-image-placeholder">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
         <span>No image</span>
       </div>`;
 
-  const statusLabel = myStatus === 'owned' ? '✓ Owned' : myStatus === 'wishlist' ? '♡ Wishlist' : '+ Track';
+  // Status toggle: logged-in users cycle status; guests see a prompt
   const toggleClass = myStatus === 'owned' ? 'is-owned' : myStatus === 'wishlist' ? 'is-wishlist' : '';
+  const toggleLabel = !loggedIn
+    ? '♡ Sign in to track'
+    : myStatus === 'owned' ? '✓ Owned'
+    : myStatus === 'wishlist' ? '♡ Wishlist'
+    : '+ Track this';
+  const toggleHint = loggedIn
+    ? `<span style="font-size:.7rem;opacity:.6">· click to cycle</span>`
+    : '';
 
   const superActions = isSuperuser
     ? `<div class="card-actions">
@@ -341,19 +363,26 @@ function createCard(item) {
        </div>`
     : '';
 
+  // Only show status badge when logged in
+  const statusBadge = loggedIn
+    ? `<span class="badge badge-${myStatus === 'none' ? 'none' : myStatus}">
+        ${myStatus === 'owned' ? '✓ Owned' : myStatus === 'wishlist' ? '♡ Wishlist' : '— Untracked'}
+       </span>`
+    : '';
+
   card.innerHTML = `
     ${imgHtml}
     <div class="card-body">
       <div class="card-badges">
-        <span class="badge badge-${myStatus === 'none' ? 'none' : myStatus}">${myStatus === 'owned' ? '✓ Owned' : myStatus === 'wishlist' ? '♡ Wishlist' : '— Untracked'}</span>
+        ${statusBadge}
         <span class="badge badge-type">${item.type}</span>
       </div>
       <div class="card-name">${item.series}</div>
       ${item.liver ? `<div class="card-group">${item.liver}</div>` : ''}
-      ${item.cost ? `<div class="card-cost">${fmtNum(item.cost)} ${item.currency || 'JPY'}</div>` : ''}
+      ${item.cost   ? `<div class="card-cost">${fmtNum(item.cost)} ${item.currency || 'JPY'}</div>` : ''}
     </div>
     <button class="status-toggle ${toggleClass}" onclick="cycleStatus(${item.id})">
-      ${statusLabel} <span style="font-size:.7rem;opacity:.7">· click to cycle</span>
+      ${toggleLabel} ${toggleHint}
     </button>
     ${superActions}`;
   return card;
@@ -369,20 +398,22 @@ function renderTable(items) {
     return;
   }
 
+  const loggedIn = !!currentUser;
   const wrap = document.createElement('div');
   wrap.className = 'table-wrap';
   wrap.innerHTML = `
     <table>
       <thead>
         <tr>
-          <th></th><th>Name</th><th>Liver</th><th>Type</th>
-          <th>My Status</th><th>Cost</th><th>Notes</th>
+          <th></th><th>Liver</th><th>Series</th><th>Type</th>
+          ${loggedIn ? '<th>My Status</th>' : ''}
+          <th>Cost</th>
           ${isSuperuser ? '<th></th>' : ''}
         </tr>
       </thead>
       <tbody>
         ${items.map(item => {
-          const myStatus = userStatuses[item.id] || 'none';
+          const myStatus    = userStatuses[item.id] || 'none';
           const toggleClass = myStatus === 'owned' ? 'is-owned' : myStatus === 'wishlist' ? 'is-wishlist' : '';
           return `
           <tr>
@@ -393,12 +424,12 @@ function renderTable(items) {
             <td><strong>${item.series}</strong></td>
             <td>${item.liver || '—'}</td>
             <td><span class="badge badge-type">${item.type}</span></td>
-            <td>
+            ${loggedIn ? `<td>
               <button class="status-toggle ${toggleClass}" style="border-radius:999px;padding:.2rem .7rem;font-size:.72rem;width:auto"
                 onclick="cycleStatus(${item.id})">
                 ${myStatus === 'owned' ? '✓ Owned' : myStatus === 'wishlist' ? '♡ Wishlist' : '+ Track'}
               </button>
-            </td>
+            </td>` : ''}
             <td style="white-space:nowrap">${item.cost ? `${fmtNum(item.cost)} ${item.currency || 'JPY'}` : '—'}</td>
             ${isSuperuser ? `<td style="white-space:nowrap">
               <button class="btn btn-ghost btn-sm" onclick="openEdit(${item.id})">Edit</button>
@@ -412,7 +443,7 @@ function renderTable(items) {
 }
 
 /* ══════════════════════════════════════════════════════
-   MODAL (superuser only)
+   MERCH MODAL (superuser only)
    ══════════════════════════════════════════════════════ */
 function openAdd() {
   editingId = null;
@@ -425,10 +456,10 @@ function openEdit(id) {
   const item = allItems.find(i => i.id === id);
   if (!item) return;
   editingId = id;
-  document.getElementById('modalTitle').textContent = 'Edit Merch';
+  document.getElementById('modalTitle').textContent  = 'Edit Merch';
   document.getElementById('fImage').value    = item.image    || '';
-  document.getElementById('fSeries').value     = item.series     || '';
-  document.getElementById('fLiver').value    = item.liver || '';
+  document.getElementById('fSeries').value     = item.series   || '';
+  document.getElementById('fLiver').value    = item.liver   || '';
   document.getElementById('fType').value     = item.type     || '';
   document.getElementById('fCost').value     = item.cost     || '';
   document.getElementById('fCurrency').value = item.currency || 'JPY';
@@ -440,28 +471,39 @@ function closeModal() {
 }
 
 /* ══════════════════════════════════════════════════════
-   PERMISSIONS
+   HEADER STATE
    ══════════════════════════════════════════════════════ */
-function applyPermissions() {
-  document.getElementById('headerEmail').textContent = currentUser.username;
-  document.getElementById('superBadge').style.display = isSuperuser ? '' : 'none';
-  document.getElementById('btnAdd').style.display    = isSuperuser ? '' : 'none';
-  document.getElementById('btnImport').style.display = isSuperuser ? '' : 'none';
-  document.getElementById('btnExport').style.display = isSuperuser ? '' : 'none';
+function applyHeaderLoggedIn() {
+  document.getElementById('btnSignIn').style.display    = 'none';
+  document.getElementById('btnSignUp').style.display    = 'none';
+  document.getElementById('headerUser').style.display   = '';
+  document.getElementById('btnSignOut').style.display   = '';
+  document.getElementById('statusFilter').style.display = '';
+  document.getElementById('headerUsername').textContent = currentUser.username;
+  document.getElementById('superBadge').style.display   = isSuperuser ? '' : 'none';
+  document.getElementById('btnAdd').style.display       = isSuperuser ? '' : 'none';
+  document.getElementById('btnImport').style.display    = isSuperuser ? '' : 'none';
+  document.getElementById('btnExport').style.display    = isSuperuser ? '' : 'none';
+}
+
+function applyHeaderLoggedOut() {
+  document.getElementById('btnSignIn').style.display    = '';
+  document.getElementById('btnSignUp').style.display    = '';
+  document.getElementById('headerUser').style.display   = 'none';
+  document.getElementById('btnSignOut').style.display   = 'none';
+  document.getElementById('statusFilter').style.display = 'none';
+  document.getElementById('superBadge').style.display   = 'none';
+  document.getElementById('btnAdd').style.display       = 'none';
+  document.getElementById('btnImport').style.display    = 'none';
+  document.getElementById('btnExport').style.display    = 'none';
 }
 
 /* ══════════════════════════════════════════════════════
    UTILITY
    ══════════════════════════════════════════════════════ */
-function showScreen(screen) {
-  document.getElementById('loadingScreen').style.display = 'none';
-  document.getElementById('authPage').style.display = screen === 'auth' ? '' : 'none';
-  document.getElementById('appPage').style.display  = screen === 'app'  ? '' : 'none';
-}
-
 function setView(v) {
   currentView = v;
-  document.getElementById('viewGrid').classList.toggle('active', v === 'grid');
+  document.getElementById('viewGrid').classList.toggle('active',  v === 'grid');
   document.getElementById('viewTable').classList.toggle('active', v === 'table');
   render();
 }
@@ -472,13 +514,13 @@ function fmtNum(n) {
 
 function setSaveLoading(on) {
   const btn = document.getElementById('saveBtn');
-  btn.disabled = on;
+  btn.disabled    = on;
   btn.textContent = on ? 'Saving…' : 'Save';
 }
 
 function setAuthLoading(id, on) {
   const btn = document.getElementById(id);
-  btn.disabled = on;
+  btn.disabled    = on;
   btn.textContent = on ? 'Please wait…' : id === 'loginBtn' ? 'Sign In' : 'Create Account';
 }
 
@@ -495,7 +537,7 @@ function clearAuthMessage() {
 function toast(msg, isError = false) {
   const c = document.getElementById('toastContainer');
   const t = document.createElement('div');
-  t.className = 'toast' + (isError ? ' toast-error' : '');
+  t.className   = 'toast' + (isError ? ' toast-error' : '');
   t.textContent = msg;
   c.appendChild(t);
   setTimeout(() => t.remove(), 2900);
@@ -517,18 +559,28 @@ function bindEvents() {
   document.getElementById('statusFilter').addEventListener('change', render);
   document.getElementById('typeFilter').addEventListener('change', render);
   document.getElementById('liverFilter').addEventListener('change', render);
+
+  // Close modals on overlay click
   document.getElementById('modalOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeModal();
   });
+  document.getElementById('authOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeAuthModal();
+  });
+
   document.getElementById('importFileInput').addEventListener('change', e => {
     if (e.target.files[0]) importJson(e.target.files[0]);
     e.target.value = '';
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-  // Allow Enter key on auth inputs
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal(); closeAuthModal(); }
+  });
+
   ['loginUsername','loginPassword'].forEach(id => {
-    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') handleLogin();
+    });
   });
 }
 
