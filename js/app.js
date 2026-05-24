@@ -5,6 +5,7 @@
 
 /* ── Supabase client ──────────────────────────────────── */
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+window._sb = sb;
 
 /* ── App state ────────────────────────────────────────── */
 let currentUser  = null;   // null = logged out (guest)
@@ -18,21 +19,19 @@ const TYPE_OPTIONS     = ['Acrylic Stand','Cheki Card','Plushie','Tapestry','Key
 const CURRENCY_OPTIONS = ['JPY','USD','EUR','GBP','AUD','CAD','SGD','TWD','KRW'];
 
 /* ══════════════════════════════════════════════════════
-   BOOTSTRAP — load merch immediately, auth is optional
+   BOOTSTRAP - load merch immediately, auth is optional
    ══════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   populateSelects();
   bindEvents();
+  applyStaticStrings();
 
-  // Always load the catalogue — no login required
   await loadMerch();
 
-  // Check if already logged in
   const { data: { session } } = await sb.auth.getSession();
   if (session) await onSignedIn(session.user);
   else onSignedOut();
 
-  // React to future auth changes
   sb.auth.onAuthStateChange(async (_event, session) => {
     if (session) await onSignedIn(session.user);
     else onSignedOut();
@@ -61,21 +60,21 @@ function switchTab(tab) {
 }
 
 function usernameToEmail(username) {
-  return username.toLowerCase() + '@speciale.co';
+  return username.toLowerCase() + '@merchrchive.local';
 }
 
 function validateUsername(username) {
-  if (!username) return 'Please enter a username.';
-  if (username.length < 3) return 'Username must be at least 3 characters.';
-  if (username.length > 30) return 'Username must be 30 characters or fewer.';
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) return 'Only letters, numbers, and underscores allowed.';
+  if (!username)              return t('errUsernameEmpty');
+  if (username.length < 3)   return t('errUsernameTooShort');
+  if (username.length > 30)  return t('errUsernameTooLong');
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) return t('errUsernameChars');
   return null;
 }
 
 async function handleLogin() {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value;
-  if (!username || !password) return showAuthError('Please enter your username and password.');
+  if (!username || !password) return showAuthError(t('errLoginFields'));
 
   setAuthLoading('loginBtn', true);
   const { error } = await sb.auth.signInWithPassword({
@@ -84,10 +83,9 @@ async function handleLogin() {
   setAuthLoading('loginBtn', false);
 
   if (error) {
-    if (error.message.includes('Invalid login')) showAuthError('Incorrect username or password.');
+    if (error.message.includes('Invalid login')) showAuthError(t('errLoginWrong'));
     else showAuthError(error.message);
   }
-  // success → onAuthStateChange → onSignedIn → closeAuthModal
 }
 
 async function handleSignup() {
@@ -97,9 +95,9 @@ async function handleSignup() {
 
   const err = validateUsername(username);
   if (err) return showAuthError(err);
-  if (!password) return showAuthError('Please enter a password.');
-  if (password !== confirm) return showAuthError('Passwords do not match.');
-  if (password.length < 6) return showAuthError('Password must be at least 6 characters.');
+  if (!password) return showAuthError(t('errPasswordEmpty'));
+  if (password !== confirm) return showAuthError(t('errPasswordMismatch'));
+  if (password.length < 6) return showAuthError(t('errPasswordTooShort'));
 
   setAuthLoading('signupBtn', true);
   const { error } = await sb.auth.signUp({
@@ -110,18 +108,18 @@ async function handleSignup() {
   setAuthLoading('signupBtn', false);
 
   if (error) {
-    if (error.message.includes('already registered')) showAuthError('That username is already taken.');
+    if (error.message.includes('already registered')) showAuthError(t('errUsernameTaken'));
     else showAuthError(error.message);
   } else {
-    showAuthSuccess('Account created! You can now sign in.');
+    showAuthSuccess(t('successSignup'));
     switchTab('login');
     document.getElementById('loginUsername').value = username;
   }
 }
 
+
 async function handleLogout() {
   await sb.auth.signOut();
-  // onAuthStateChange → onSignedOut handles the rest
 }
 
 async function onSignedIn(user) {
@@ -150,9 +148,10 @@ function onSignedOut() {
 async function loadMerch() {
   const { data, error } = await sb
     .from('merch')
-    .select('*');
+    .select('*')
+    .order('released_date', { ascending: true });
 
-  if (error) { toast('Failed to load merch: ' + error.message, true); return; }
+  if (error) { toast(t('loadError') + ': ' + error.message, true); return; }
   allItems = data || [];
 
   // Show the app now — user can browse immediately
@@ -165,37 +164,73 @@ async function loadUserStatuses() {
   if (!currentUser) return;
   const { data, error } = await sb
     .from('user_statuses')
-    .select('merch_id, status')
+    .select('merch_id, status, notes')
     .eq('user_id', currentUser.id);
 
-  if (error) { toast('Failed to load your statuses', true); return; }
+  if (error) { toast(t('statusError'), true); return; }
   userStatuses = {};
-  (data || []).forEach(s => { userStatuses[s.merch_id] = s.status; });
+  (data || []).forEach(s => {
+    userStatuses[s.merch_id] = { status: s.status, notes: s.notes || '' };
+  });
 }
 
-/* ── Status toggle — requires login ──────────────────── */
+/* ── Status toggle ─ requires login ──────────────────────────────────── */
 async function cycleStatus(itemId) {
-  if (!currentUser) {
-    openAuthModal('login');
-    return;
-  }
+  if (!currentUser) { openAuthModal('login'); return; }
 
-  const current = userStatuses[itemId] || 'none';
+  const entry   = userStatuses[itemId] || { status: 'none', notes: '' };
+  const current = entry.status;
   const next    = current === 'none' ? 'owned' : current === 'owned' ? 'wishlist' : 'none';
 
-  // Optimistic update
-  userStatuses[itemId] = next;
+  // Optimistic update — preserve notes
+  userStatuses[itemId] = { status: next, notes: entry.notes };
   render();
 
   const { error } = next === 'none'
     ? await sb.from('user_statuses').delete()
         .eq('user_id', currentUser.id).eq('merch_id', itemId)
     : await sb.from('user_statuses').upsert(
-        { user_id: currentUser.id, merch_id: itemId, status: next },
+        { user_id: currentUser.id, merch_id: itemId, status: next, notes: entry.notes },
         { onConflict: 'user_id,merch_id' }
       );
 
-  if (error) { toast('Error saving status', true); await loadUserStatuses(); render(); }
+  if (error) { toast(t('statusError'), true); await loadUserStatuses(); render(); }
+}
+
+/* ── Save note (debounced, called on textarea input) ──── */
+const _noteTimers = {};
+function onNoteInput(itemId, value) {
+  // Update local state immediately so it survives re-renders
+  if (!userStatuses[itemId]) userStatuses[itemId] = { status: 'none', notes: '' };
+  userStatuses[itemId].notes = value;
+
+  // Debounce the Supabase write by 800ms
+  clearTimeout(_noteTimers[itemId]);
+  _noteTimers[itemId] = setTimeout(() => saveNote(itemId, value), 800);
+}
+
+async function saveNote(itemId, notes) {
+  if (!currentUser) return;
+  console.log(itemId);
+  console.log(notes);
+  const status = (userStatuses[itemId]?.status) || 'none';
+  console.log(status);
+
+  const { error } = await sb.from('user_statuses').upsert(
+    { user_id: currentUser.id, merch_id: itemId, status: status, notes: notes },
+    { onConflict: 'user_id,merch_id' }
+  );
+  if (error) console.log(error);
+  if (error) toast(t('noteError'), true);
+  else showNoteSaved(itemId);
+}
+
+function showNoteSaved(itemId) {
+  const el = document.querySelector(`.note-saved[data-id="${itemId}"]`);
+  if (!el) return;
+  el.style.opacity = '1';
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => { el.style.opacity = '0'; }, 1500);
 }
 
 /* ── Superuser: add / edit / delete ──────────────────── */
@@ -203,6 +238,7 @@ async function saveItem() {
   const series = document.getElementById('fSeries').value.trim();
   if (!series) { document.getElementById('fSeries').focus(); return; }
   setSaveLoading(true);
+
   const payload = {
     series:    series,
     liver:   document.getElementById('fLiver').value.trim(),
@@ -217,18 +253,18 @@ async function saveItem() {
     : await sb.from('merch').insert(payload);
 
   setSaveLoading(false);
-  if (error) { toast('Save failed: ' + error.message, true); return; }
+  if (error) { toast(t('saveError') + ': ' + error.message, true); return; }
 
-  toast(editingId ? 'Item updated' : 'Item added');
+  toast(editingId ? t('updatedMsg') : t('addedMsg'));
   closeModal();
   await loadMerch();
 }
 
 async function deleteItem(id) {
-  if (!confirm('Delete this item? This cannot be undone.')) return;
+  if (!confirm(t('deleteConfirm'))) return;
   const { error } = await sb.from('merch').delete().eq('id', id);
-  if (error) { toast('Delete failed: ' + error.message, true); return; }
-  toast('Item deleted');
+  if (error) { toast(t('deleteError') + ': ' + error.message, true); return; }
+  toast(t('deletedMsg'));
   await loadMerch();
 }
 
@@ -238,7 +274,7 @@ function exportJson() {
   const a    = document.createElement('a');
   a.href = url; a.download = 'merch.json'; a.click();
   URL.revokeObjectURL(url);
-  toast('Exported merch.json');
+  toast(t('exportedMsg'));
 }
 
 function importJson(file) {
@@ -250,9 +286,9 @@ function importJson(file) {
       const { error } = await sb.from('merch').upsert(data);
       if (error) throw error;
       await loadMerch();
-      toast(`Imported ${data.length} items`);
+      toast(data.length + ' ' + t('importedMsg'));
     } catch (err) {
-      toast('Import failed: ' + (err.message || 'Invalid file'), true);
+      toast(t('importError') + ': ' + (err.message || ''), true);
     }
   };
   reader.readAsText(file);
@@ -276,39 +312,32 @@ function getFiltered() {
   const liverFilter  = document.getElementById('liverFilter').value;
 
   return allItems.filter(item => {
-    const myStatus = userStatuses[item.id] || 'none';
+    const myStatus = (userStatuses[item.id]?.status) || 'none';
     const matchQ      = !q || (item.liver||'').toLowerCase().includes(q)
-                          || (item.series||'').toLowerCase().includes(q)
-                          || (item.notes||'').toLowerCase().includes(q);
+                          || (item.series||'').toLowerCase().includes(q);
     const matchStatus = !statusFilter || myStatus === statusFilter;
     const matchType   = !typeFilter || item.type === typeFilter;
-    const matchLiver  = !liverFilter || item.series === liverFilter;
+    const matchLiver  = !liverFilter || item.liver === liverFilter;
     return matchQ && matchStatus && matchType && matchLiver;
   });
 }
 
 function updateStats() {
-  document.getElementById('statTotal').textContent  = allItems.length;
+  const myOwned    = allItems.filter(i => (userStatuses[i.id]?.status) === 'owned');
+  const myWishlist = allItems.filter(i => (userStatuses[i.id]?.status) === 'wishlist');
+  const groups     = new Set(allItems.map(i => i.series).filter(Boolean));
 
-  const loggedIn = !!currentUser;
-  // Show personal stats only when logged in
-  document.getElementById('statOwnedWrap').style.display   = loggedIn ? '' : 'none';
-  document.getElementById('statWishlistWrap').style.display = loggedIn ? '' : 'none';
+  document.getElementById('statTotal').textContent    = allItems.length;
+  document.getElementById('statOwned').textContent    = currentUser ? myOwned.length    : '—';
+  document.getElementById('statWishlist').textContent = currentUser ? myWishlist.length : '—';
 
-  if (loggedIn) {
-    const myOwned    = allItems.filter(i => userStatuses[i.id] === 'owned');
-    const myWishlist = allItems.filter(i => userStatuses[i.id] === 'wishlist');
-    document.getElementById('statOwned').textContent    = myOwned.length;
-    document.getElementById('statWishlist').textContent = myWishlist.length;
-
-  }
 }
 
 function updateLiverFilter() {
   const gf   = document.getElementById('liverFilter');
   const prev = gf.value;
   const livers = [...new Set(allItems.map(i => i.liver).filter(Boolean))].sort();
-  gf.innerHTML = '<option value="">All livers</option>';
+  gf.innerHTML = `<option value="">${t('allLivers')}</option>`;
   livers.forEach(g => {
     const o = document.createElement('option');
     o.value = g; o.textContent = g;
@@ -325,7 +354,7 @@ function renderGrid(items) {
   grid.className = 'grid';
 
   if (!items.length) {
-    grid.innerHTML = `<div class="empty-state"><p>No items found</p><p>Try adjusting your filters.</p></div>`;
+    grid.innerHTML = `<div class="empty-state"><p>${t('noItems')}</p><p>${t('noItemsSub')}</p></div>`;
   } else {
     items.forEach(item => grid.appendChild(createCard(item)));
   }
@@ -333,41 +362,50 @@ function renderGrid(items) {
 }
 
 function createCard(item) {
-  const myStatus   = userStatuses[item.id] || 'none';
-  const loggedIn   = !!currentUser;
-  const card       = document.createElement('div');
-  card.className   = 'card';
+  const entry       = userStatuses[item.id] || { status: 'none', notes: '' };
+  const myStatus    = entry.status;
+  const myNotes     = entry.notes || '';
+  const toggleClass = myStatus === 'owned' ? 'is-owned' : myStatus === 'wishlist' ? 'is-wishlist' : '';
+
+  const card = document.createElement('div');
+  card.className = 'card';
 
   const imgHtml = item.image
     ? `<img class="card-image" src="${item.image}" alt="${item.liver}" loading="lazy">`
     : `<div class="card-image-placeholder">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-        <span>No image</span>
+        <span>${t('noImage')}</span>
       </div>`;
 
-  // Status toggle: logged-in users cycle status; guests see a prompt
-  const toggleClass = myStatus === 'owned' ? 'is-owned' : myStatus === 'wishlist' ? 'is-wishlist' : '';
-  const toggleLabel = !loggedIn
-    ? '♡ Sign in to track'
-    : myStatus === 'owned' ? '✓ Owned'
-    : myStatus === 'wishlist' ? '♡ Wishlist'
-    : '+ Track this';
-  const toggleHint = loggedIn
-    ? `<span style="font-size:.7rem;opacity:.6">· click to cycle</span>`
+  const statusBadge = myStatus !== 'none'
+    ? `<span class="badge badge-${myStatus}">${t(myStatus)}</span>`
     : '';
+
+  let toggleLabel, toggleHint;
+  if (!currentUser) {
+    toggleLabel = t('signInToTrack');
+    toggleHint  = '';
+  } else {
+    toggleLabel = myStatus === 'none' ? t('trackHint') : t(myStatus);
+    toggleHint  = `<span style="font-size:.7rem;opacity:.6">${t('cycleHint')}</span>`;
+  }
+
+  // Notes section — only shown when logged in
+  const notesHtml = currentUser ? `
+    <div class="card-notes-section">
+      <textarea
+        class="card-note-input"
+        placeholder="${t('notesPlaceholder')}"
+        oninput="onNoteInput(${item.id}, this.value)"
+      >${myNotes}</textarea>
+      <span class="note-saved" data-id="${item.id}">${t('noteSaved')}</span>
+    </div>` : '';
 
   const superActions = isSuperuser
     ? `<div class="card-actions">
-        <button class="btn btn-ghost btn-sm" onclick="openEdit(${item.id})">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">Delete</button>
+        <button class="btn btn-ghost btn-sm" onclick="openEdit(${item.id})">${t('edit')}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">${t('delete')}</button>
        </div>`
-    : '';
-
-  // Only show status badge when logged in
-  const statusBadge = loggedIn
-    ? `<span class="badge badge-${myStatus === 'none' ? 'none' : myStatus}">
-        ${myStatus === 'owned' ? '✓ Owned' : myStatus === 'wishlist' ? '♡ Wishlist' : '— Untracked'}
-       </span>`
     : '';
 
   card.innerHTML = `
@@ -375,11 +413,12 @@ function createCard(item) {
     <div class="card-body">
       <div class="card-badges">
         ${statusBadge}
-        <span class="badge badge-type">${item.type}</span>
+        <span class="badge badge-type">${tType(item.type)}</span>
       </div>
       <div class="card-name">${item.series}</div>
       ${item.liver ? `<div class="card-group">${item.liver}</div>` : ''}
       ${item.cost   ? `<div class="card-cost">${fmtNum(item.cost)} ${item.currency || 'JPY'}</div>` : ''}
+      ${notesHtml}
     </div>
     <button class="status-toggle ${toggleClass}" onclick="cycleStatus(${item.id})">
       ${toggleLabel} ${toggleHint}
@@ -394,7 +433,7 @@ function renderTable(items) {
   container.innerHTML = '';
 
   if (!items.length) {
-    container.innerHTML = `<div class="empty-state"><p>No items found</p><p>Try adjusting your filters.</p></div>`;
+    container.innerHTML = `<div class="empty-state"><p>${t('noItems')}</p><p>${t('noItemsSub')}</p></div>`;
     return;
   }
 
@@ -405,16 +444,20 @@ function renderTable(items) {
     <table>
       <thead>
         <tr>
-          <th></th><th>Liver</th><th>Series</th><th>Type</th>
-          ${loggedIn ? '<th>My Status</th>' : ''}
-          <th>Cost</th>
+          <th></th>
+          <th>${t('colSeries')}</th>
+          <th>${t('colLiver')}</th>
+          <th>${t('colType')}</th>
+          ${loggedIn ? `<th>${t('colStatus')}</th>` : ''}
+          <th>${t('colCost')}</th>
           ${isSuperuser ? '<th></th>' : ''}
         </tr>
       </thead>
       <tbody>
         ${items.map(item => {
-          const myStatus    = userStatuses[item.id] || 'none';
+          const myStatus    = (userStatuses[item.id]?.status) || 'none';
           const toggleClass = myStatus === 'owned' ? 'is-owned' : myStatus === 'wishlist' ? 'is-wishlist' : '';
+          const toggleLabel = myStatus === 'owned' ? t('owned') : myStatus === 'wishlist' ? t('wishlist') : t('trackHint');
           return `
           <tr>
             <td>${item.image
@@ -423,17 +466,18 @@ function renderTable(items) {
             </td>
             <td><strong>${item.series}</strong></td>
             <td>${item.liver || '—'}</td>
-            <td><span class="badge badge-type">${item.type}</span></td>
+            <td><span class="badge badge-type">${tType(item.type)}</span></td>
             ${loggedIn ? `<td>
-              <button class="status-toggle ${toggleClass}" style="border-radius:999px;padding:.2rem .7rem;font-size:.72rem;width:auto"
+              <button class="status-toggle ${toggleClass}"
+                style="border-radius:999px;padding:.2rem .7rem;font-size:.72rem;width:auto"
                 onclick="cycleStatus(${item.id})">
-                ${myStatus === 'owned' ? '✓ Owned' : myStatus === 'wishlist' ? '♡ Wishlist' : '+ Track'}
+                ${toggleLabel}
               </button>
             </td>` : ''}
             <td style="white-space:nowrap">${item.cost ? `${fmtNum(item.cost)} ${item.currency || 'JPY'}` : '—'}</td>
             ${isSuperuser ? `<td style="white-space:nowrap">
-              <button class="btn btn-ghost btn-sm" onclick="openEdit(${item.id})">Edit</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">Delete</button>
+              <button class="btn btn-ghost btn-sm" onclick="openEdit(${item.id})">${t('edit')}</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">${t('delete')}</button>
             </td>` : ''}
           </tr>`;
         }).join('')}
@@ -447,7 +491,7 @@ function renderTable(items) {
    ══════════════════════════════════════════════════════ */
 function openAdd() {
   editingId = null;
-  document.getElementById('modalTitle').textContent = 'Add Merch';
+  document.getElementById('modalTitle').textContent = t('addMerch');
   document.getElementById('merch-form').reset();
   document.getElementById('modalOverlay').classList.add('open');
 }
@@ -456,9 +500,9 @@ function openEdit(id) {
   const item = allItems.find(i => i.id === id);
   if (!item) return;
   editingId = id;
-  document.getElementById('modalTitle').textContent  = 'Edit Merch';
+  document.getElementById('modalTitle').textContent  = t('editMerch');
   document.getElementById('fImage').value    = item.image    || '';
-  document.getElementById('fSeries').value     = item.series   || '';
+  document.getElementById('fSeries').value     = item.series    || '';
   document.getElementById('fLiver').value    = item.liver   || '';
   document.getElementById('fType').value     = item.type     || '';
   document.getElementById('fCost').value     = item.cost     || '';
@@ -484,6 +528,10 @@ function applyHeaderLoggedIn() {
   document.getElementById('btnAdd').style.display       = isSuperuser ? '' : 'none';
   document.getElementById('btnImport').style.display    = isSuperuser ? '' : 'none';
   document.getElementById('btnExport').style.display    = isSuperuser ? '' : 'none';
+  // Re-apply translated strings that vary by login state
+  document.getElementById('superBadge').textContent     = t('ownerBadge');
+  document.getElementById('btnAdd').textContent         = t('addItem');
+  document.getElementById('btnSignOut').textContent     = t('signOut');
 }
 
 function applyHeaderLoggedOut() {
@@ -496,6 +544,8 @@ function applyHeaderLoggedOut() {
   document.getElementById('btnAdd').style.display       = 'none';
   document.getElementById('btnImport').style.display    = 'none';
   document.getElementById('btnExport').style.display    = 'none';
+  document.getElementById('btnSignIn').textContent      = t('signIn');
+  document.getElementById('btnSignUp').textContent      = t('createAccount');
 }
 
 /* ══════════════════════════════════════════════════════
@@ -515,13 +565,13 @@ function fmtNum(n) {
 function setSaveLoading(on) {
   const btn = document.getElementById('saveBtn');
   btn.disabled    = on;
-  btn.textContent = on ? 'Saving…' : 'Save';
+  btn.textContent = on ? t('saving') : t('save');
 }
 
 function setAuthLoading(id, on) {
   const btn = document.getElementById(id);
   btn.disabled    = on;
-  btn.textContent = on ? 'Please wait…' : id === 'loginBtn' ? 'Sign In' : 'Create Account';
+  btn.textContent = on ? t('waitMsg') : id === 'loginBtn' ? t('loginBtn') : t('signupBtn');
 }
 
 function showAuthError(msg) {
@@ -546,9 +596,9 @@ function toast(msg, isError = false) {
 function populateSelects() {
   const tf = document.getElementById('typeFilter');
   const fs = document.getElementById('fType');
-  TYPE_OPTIONS.forEach(t => {
-    tf.innerHTML += `<option value="${t}">${t}</option>`;
-    fs.innerHTML += `<option value="${t}">${t}</option>`;
+  TYPE_OPTIONS.forEach(key => {
+    tf.innerHTML += `<option value="${key}">${tType(key)}</option>`;
+    fs.innerHTML += `<option value="${key}">${tType(key)}</option>`;
   });
   const curr = document.getElementById('fCurrency');
   CURRENCY_OPTIONS.forEach(c => { curr.innerHTML += `<option value="${c}">${c}</option>`; });
@@ -560,7 +610,6 @@ function bindEvents() {
   document.getElementById('typeFilter').addEventListener('change', render);
   document.getElementById('liverFilter').addEventListener('change', render);
 
-  // Close modals on overlay click
   document.getElementById('modalOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeModal();
   });
@@ -583,5 +632,3 @@ function bindEvents() {
     });
   });
 }
-
-window._sb = sb;

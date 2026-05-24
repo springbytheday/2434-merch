@@ -62,6 +62,8 @@ body {
   font-size: .85rem;
   margin-bottom: 2rem;
 }
+/* lang toggle active matches view-btn pattern */
+.view-btn.active { background: var(--bg); color: var(--text); font-weight: 500; }
 .auth-tabs {
   display: flex;
   border: 1px solid var(--border);

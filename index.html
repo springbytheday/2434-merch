@@ -10,10 +10,10 @@
 
 <body>
 
-  <!-- ── Loading screen ─────────────────────────────────── -->
+  <!-- ── Loading ────────────────────────────────────────── -->
   <div class="loading-screen" id="loadingScreen">
     <div class="spinner"></div>
-    <span>Loading…</span>
+    <span id="loadingText">Loading…</span>
   </div>
 
   <!-- ── Main app (always visible after load) ───────────── -->
@@ -23,17 +23,25 @@
       <span class="logo">Merch<span>Archive</span></span>
       <div class="header-actions">
 
-        <!-- Shown when logged out -->
-        <button class="btn btn-ghost btn-sm" id="btnSignIn" onclick="openAuthModal('login')" style="display:none">Sign
-          in</button>
-        <button class="btn btn-primary btn-sm" id="btnSignUp" onclick="openAuthModal('signup')"
-          style="display:none">Create account</button>
+        <!-- Language toggle -->
+        <div class="view-toggle">
+          <button class="view-btn active" id="langEN" onclick="setLang('en')">EN</button>
+          <button class="view-btn" id="langJA" onclick="setLang('ja')">日本語</button>
+        </div>
 
-        <!-- Shown when logged in -->
+        <!-- Guest buttons -->
+        <button class="btn btn-ghost btn-sm" id="btnSignIn" onclick="openAuthModal('login')"
+          style="display:none"></button>
+        <button class="btn btn-primary btn-sm" id="btnSignUp" onclick="openAuthModal('signup')"
+          style="display:none"></button>
+
+        <!-- Logged-in user -->
         <div class="header-user" id="headerUser" style="display:none">
           <span id="headerUsername"></span>
-          <span class="superuser-badge" id="superBadge" style="display:none">Owner</span>
+          <span class="superuser-badge" id="superBadge" style="display:none"></span>
         </div>
+
+        <!-- Superuser actions -->
         <button class="btn btn-ghost" id="btnImport" style="display:none"
           onclick="document.getElementById('importFileInput').click()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -41,7 +49,7 @@
             <polyline points="17 8 12 3 7 8" />
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
-          Import
+          <span id="btnImport"></span>
         </button>
         <input type="file" id="importFileInput" accept=".json" style="display:none">
         <button class="btn btn-ghost" id="btnExport" style="display:none" onclick="exportJson()">
@@ -50,17 +58,16 @@
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          Export
+          <span id="btnExport"></span>
         </button>
         <button class="btn btn-primary" id="btnAdd" style="display:none" onclick="openAdd()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-          Add Item
         </button>
-        <button class="btn btn-ghost btn-sm" id="btnSignOut" onclick="handleLogout()" style="display:none">Sign
-          out</button>
+
+        <button class="btn btn-ghost btn-sm" id="btnSignOut" style="display:none" onclick="handleLogout()"></button>
       </div>
     </header>
 
@@ -68,15 +75,15 @@
       <!-- Stats -->
       <div class="stats">
         <div class="stat-item">
-          <span class="stat-label">Total Items</span>
+          <span class="stat-label" id="labelStatTotal">Total Items</span>
           <span class="stat-value" id="statTotal">—</span>
         </div>
-        <div class="stat-item" id="statOwnedWrap">
-          <span class="stat-label">My Owned</span>
+        <div class="stat-item">
+          <span class="stat-label" id="labelStatOwned">My Owned</span>
           <span class="stat-value" id="statOwned">—</span>
         </div>
-        <div class="stat-item" id="statWishlistWrap">
-          <span class="stat-label">My Wishlist</span>
+        <div class="stat-item">
+          <span class="stat-label" id="labelStatWishlist">My Wishlist</span>
           <span class="stat-value" id="statWishlist">—</span>
         </div>
       </div>
@@ -88,22 +95,22 @@
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <input type="text" id="searchInput" class="search-input" placeholder="Search by name, group, notes…">
+          <input type="text" id="searchInput" class="search-input">
         </div>
         <select id="statusFilter" class="filter-select" style="display:none">
           <option value="">All statuses</option>
-          <option value="owned">My Owned</option>
-          <option value="wishlist">My Wishlist</option>
+          <option value="owned">Owned</option>
+          <option value="wishlist">Wishlist</option>
           <option value="none">Not tracked</option>
         </select>
         <select id="typeFilter" class="filter-select">
           <option value="">All types</option>
         </select>
         <select id="liverFilter" class="filter-select">
-          <option value="">All series</option>
+          <option value="">All livers</option>
         </select>
         <div class="view-toggle">
-          <button class="view-btn active" id="viewGrid" onclick="setView('grid')" title="Grid view">
+          <button class="view-btn active" id="viewGrid" onclick="setView('grid')" title="Grid">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="7" height="7" />
               <rect x="14" y="3" width="7" height="7" />
@@ -111,7 +118,7 @@
               <rect x="14" y="14" width="7" height="7" />
             </svg>
           </button>
-          <button class="view-btn" id="viewTable" onclick="setView('table')" title="Table view">
+          <button class="view-btn" id="viewTable" onclick="setView('table')" title="Table">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="8" y1="6" x2="21" y2="6" />
               <line x1="8" y1="12" x2="21" y2="12" />
@@ -129,11 +136,14 @@
     </main>
   </div>
 
-  <!-- ── Auth Modal ──────────────────────────────────────── -->
+  <!-- ── Auth modal ─────────────────────────────────────── -->
   <div class="modal-overlay" id="authOverlay">
-    <div class="modal" style="max-width:380px">
+    <div class="modal">
       <div class="modal-header">
-        <span class="modal-title">Welcome to MerchArchive</span>
+        <div>
+          <div class="auth-logo" id="authModalTitle">MerchArchive</div>
+          <div class="auth-subtitle" id="authModalSubtitle"></div>
+        </div>
         <button class="modal-close" onclick="closeAuthModal()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -141,52 +151,51 @@
           </svg>
         </button>
       </div>
-      <div class="modal-body" style="padding-top:1rem">
-        <div class="auth-tabs" style="margin-bottom:1.25rem">
+      <div class="modal-body">
+        <div class="auth-tabs">
           <button class="auth-tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
           <button class="auth-tab" id="tabSignup" onclick="switchTab('signup')">Create Account</button>
         </div>
-
         <div id="authMessage"></div>
 
-        <!-- Login form -->
+        <!-- Login -->
         <div id="formLogin">
           <div class="form-group" style="margin-bottom:1rem">
-            <label for="loginUsername">Username</label>
-            <input type="text" id="loginUsername" placeholder="your username" autocomplete="username">
+            <label id="labelLoginUsername">Username</label>
+            <input type="text" id="loginUsername" autocomplete="username">
           </div>
           <div class="form-group" style="margin-bottom:1.25rem">
-            <label for="loginPassword">Password</label>
+            <label id="labelLoginPassword">Password</label>
             <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
           </div>
-          <button class="btn btn-primary btn-full" id="loginBtn" onclick="handleLogin()">Sign In</button>
+          <button class="btn btn-primary btn-full" id="loginBtn">Sign In</button>
         </div>
 
-        <!-- Signup form -->
+        <!-- Signup -->
         <div id="formSignup" style="display:none">
           <div class="form-group" style="margin-bottom:1rem">
-            <label for="signupUsername">Username</label>
-            <input type="text" id="signupUsername" placeholder="letters, numbers, underscores" autocomplete="username">
+            <label id="labelSignupUsername">Username</label>
+            <input type="text" id="signupUsername" autocomplete="username">
           </div>
           <div class="form-group" style="margin-bottom:1rem">
-            <label for="signupPassword">Password</label>
-            <input type="password" id="signupPassword" placeholder="Min. 6 characters" autocomplete="new-password">
+            <label id="labelSignupPassword">Password</label>
+            <input type="password" id="signupPassword" autocomplete="new-password">
           </div>
           <div class="form-group" style="margin-bottom:1.25rem">
-            <label for="signupConfirm">Confirm Password</label>
-            <input type="password" id="signupConfirm" placeholder="••••••••" autocomplete="new-password">
+            <label id="labelSignupConfirm">Confirm Password</label>
+            <input type="password" id="signupConfirm" autocomplete="new-password">
           </div>
-          <button class="btn btn-primary btn-full" id="signupBtn" onclick="handleSignup()">Create Account</button>
+          <button class="btn btn-primary btn-full" id="signupBtn">Create Account</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── Add / Edit Merch Modal (superuser only) ─────────── -->
+  <!-- ── Merch modal (superuser) ─────────────────────────── -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal">
       <div class="modal-header">
-        <span class="modal-title" id="modalTitle">Add Merch</span>
+        <span class="modal-title" id="modalTitle"></span>
         <button class="modal-close" onclick="closeModal()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -197,52 +206,51 @@
       <div class="modal-body">
         <form id="merch-form" onsubmit="return false">
           <div class="form-group">
-            <label>Image URL or relative path</label>
-            <input type="text" id="fImage" placeholder="./images/suisei-acrylic.jpg or https://…">
-            <div style="font-size:.72rem;color:var(--muted);margin-top:.25rem">Put images in the <code>images/</code>
-              folder and reference as <code>./images/filename.jpg</code></div>
+            <label id="labelFImage">Image URL</label>
+            <input type="text" id="fImage">
+            <div style="font-size:.72rem;color:var(--muted);margin-top:.25rem" id="fImageTip"></div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label for="fSeries">Series *</label>
-              <input type="text" id="fSeries" placeholder="e.g. Debut" required>
+              <label id="labelFSeries">Series *</label>
+              <input type="text" id="fSeries" required>
             </div>
             <div class="form-group">
-              <label for="fLiver">Liver</label>
-              <input type="text" id="fLiver" placeholder="e.g. Nagisa Trout">
+              <label id="labelFLiver">Liver</label>
+              <input type="text" id="fLiver">
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label for="fType">Item Type</label>
+              <label id="labelFType">Type</label>
               <select id="fType" class="form-select"></select>
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label for="fCost">Cost</label>
+              <label id="labelFCost">Cost</label>
               <input type="number" id="fCost" placeholder="0" min="0" step="any">
             </div>
             <div class="form-group">
-              <label for="fCurrency">Currency</label>
+              <label id="labelFCurrency">Currency</label>
               <select id="fCurrency" class="form-select"></select>
             </div>
           </div>
         </form>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-ghost" id="cancelBtn" onclick="closeModal()">Cancel</button>
         <button class="btn btn-primary" id="saveBtn" onclick="saveItem()">Save</button>
       </div>
     </div>
   </div>
 
-  <!-- ── Toast container ─────────────────────────────────── -->
+  <!-- ── Toast ───────────────────────────────────────────── -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- ── Supabase SDK ────────────────────────────────────── -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
 </body>
 
