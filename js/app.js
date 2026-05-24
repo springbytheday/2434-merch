@@ -531,3 +531,5 @@ function bindEvents() {
     document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
   });
 }
+
+window._sb = sb;
