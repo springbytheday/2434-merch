@@ -149,7 +149,9 @@ async function loadMerch() {
   const { data, error } = await sb
     .from('merch')
     .select('*')
-    .order('released_date', { ascending: true });
+    .order('released_date', { ascending: true })
+    .order('series', { ascending: true })
+    .order('liver',{ ascending: true });
 
   if (error) { toast(t('loadError') + ': ' + error.message, true); return; }
   allItems = data || [];
