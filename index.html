@@ -168,7 +168,7 @@
             <label id="labelLoginPassword">Password</label>
             <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
           </div>
-          <button class="btn btn-primary btn-full" id="loginBtn">Sign In</button>
+          <button class="btn btn-primary btn-full" id="loginBtn" onclick="handleLogin()">Sign In</button>
         </div>
 
         <!-- Signup -->
@@ -185,14 +185,14 @@
             <label id="labelSignupConfirm">Confirm Password</label>
             <input type="password" id="signupConfirm" autocomplete="new-password">
           </div>
-          <button class="btn btn-primary btn-full" id="signupBtn">Create Account</button>
+          <button class="btn btn-primary btn-full" id="signupBtn" onclick="handleSignup()">Create Account</button>
         </div>
       </div>
     </div>
   </div>
 
   <!-- ── Merch modal (superuser) ─────────────────────────── -->
-  <div class="modal-overlay" id="modalOverlay">
+  <div class=" modal-overlay" id="modalOverlay">
     <div class="modal">
       <div class="modal-header">
         <span class="modal-title" id="modalTitle"></span>

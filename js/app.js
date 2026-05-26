@@ -60,7 +60,7 @@ function switchTab(tab) {
 }
 
 function usernameToEmail(username) {
-  return username.toLowerCase() + '@merchrchive.local';
+  return username.toLowerCase() + '@speciale.co';
 }
 
 function validateUsername(username) {
