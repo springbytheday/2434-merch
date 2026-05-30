@@ -117,7 +117,6 @@ async function handleSignup() {
   }
 }
 
-
 async function handleLogout() {
   await sb.auth.signOut();
 }
@@ -327,12 +326,12 @@ function getFiltered() {
 function updateStats() {
   const myOwned    = allItems.filter(i => (userStatuses[i.id]?.status) === 'owned');
   const myWishlist = allItems.filter(i => (userStatuses[i.id]?.status) === 'wishlist');
-  const groups     = new Set(allItems.map(i => i.series).filter(Boolean));
-
+ 
   document.getElementById('statTotal').textContent    = allItems.length;
   document.getElementById('statOwned').textContent    = currentUser ? myOwned.length    : '—';
   document.getElementById('statWishlist').textContent = currentUser ? myWishlist.length : '—';
-
+ 
+  updateStatActiveState();
 }
 
 function updateLiverFilter() {
@@ -533,7 +532,10 @@ function applyHeaderLoggedIn() {
   // Re-apply translated strings that vary by login state
   document.getElementById('superBadge').textContent     = t('ownerBadge');
   document.getElementById('btnAdd').textContent         = t('addItem');
-  document.getElementById('btnSignOut').textContent     = t('signOut');
+  document.getElementById('btnSignOut').textContent = t('signOut');
+
+  document.getElementById('statItemOwned').classList.add('stat-item-clickable');
+  document.getElementById('statItemWishlist').classList.add('stat-item-clickable');
 }
 
 function applyHeaderLoggedOut() {
@@ -547,7 +549,9 @@ function applyHeaderLoggedOut() {
   document.getElementById('btnImport').style.display    = 'none';
   document.getElementById('btnExport').style.display    = 'none';
   document.getElementById('btnSignIn').textContent      = t('signIn');
-  document.getElementById('btnSignUp').textContent      = t('createAccount');
+  document.getElementById('btnSignUp').textContent = t('createAccount');
+  document.getElementById('statItemOwned').classList.remove('stat-item-clickable', 'active');
+  document.getElementById('statItemWishlist').classList.remove('stat-item-clickable', 'active');
 }
 
 /* ══════════════════════════════════════════════════════
@@ -560,6 +564,24 @@ function toggleReveal(inputId, btn) {
   btn.querySelector('.eye-show').style.display = isHidden ? 'none' : '';
   btn.querySelector('.eye-hide').style.display = isHidden ? '' : 'none';
   btn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+}
+
+function filterByStat(status) {
+  if (!currentUser) return;
+  const sf = document.getElementById('statusFilter');
+  if (sf.value === status && status !== '') {
+    sf.value = '';
+  } else {
+    sf.value = status;
+  }
+  updateStatActiveState();
+  render();
+}
+
+function updateStatActiveState() {
+  const current = document.getElementById('statusFilter').value;
+  document.getElementById('statItemOwned').classList.toggle('active', current === 'owned');
+  document.getElementById('statItemWishlist').classList.toggle('active', current === 'wishlist');
 }
 
 function setView(v) {
@@ -623,9 +645,6 @@ function bindEvents() {
 
   document.getElementById('modalOverlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeModal();
-  });
-  document.getElementById('authOverlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeAuthModal();
   });
 
   document.getElementById('importFileInput').addEventListener('change', e => {

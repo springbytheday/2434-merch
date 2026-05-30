@@ -171,7 +171,14 @@ main {
   border-right: 1px solid var(--border);
 }
 .stat-item:last-child { border-right: none; }
-.stat-label {
+.stat-item-clickable {
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.stat-item-clickable:hover { background: var(--accent-lt); }
+.stat-item-clickable.active {
+  background: var(--accent-lt);
+  border-bottom: 2px solid var(--accent);
   font-size: .7rem;
   text-transform: uppercase;
   letter-spacing: .08em;
@@ -183,7 +190,6 @@ main {
   font-size: 1.6rem;
   line-height: 1;
 }
-
 /* ── Controls ─────────────────────────────────────────── */
 .controls {
   display: flex;
