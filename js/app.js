@@ -148,7 +148,7 @@ async function loadMerch() {
   const { data, error } = await sb
     .from('merch')
     .select('*')
-    .order('released_date', { ascending: true })
+    .order('release_date', { ascending: true })
     .order('series', { ascending: true })
     .order('liver',{ ascending: true });
 
@@ -246,6 +246,7 @@ async function saveItem() {
     type:     document.getElementById('fType').value,
     cost:     parseFloat(document.getElementById('fCost').value) || 0,
     currency: document.getElementById('fCurrency').value,
+    release_date: document.getElementById('fReleaseDate').value || null,
     image:    document.getElementById('fImage').value.trim(),
   };
 
@@ -505,7 +506,8 @@ function openEdit(id) {
   document.getElementById('fImage').value    = item.image    || '';
   document.getElementById('fSeries').value     = item.series    || '';
   document.getElementById('fLiver').value    = item.liver   || '';
-  document.getElementById('fType').value     = item.type     || '';
+  document.getElementById('fType').value = item.type || '';
+  document.getElementById('fReleaseDate').value = item.release_date || '';
   document.getElementById('fCost').value     = item.cost     || '';
   document.getElementById('fCurrency').value = item.currency || 'JPY';
   document.getElementById('modalOverlay').classList.add('open');
@@ -589,6 +591,14 @@ function setView(v) {
   document.getElementById('viewGrid').classList.toggle('active',  v === 'grid');
   document.getElementById('viewTable').classList.toggle('active', v === 'table');
   render();
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString(currentLang === 'ja' ? 'ja-JP' : 'en-GB', {
+    year: 'numeric', month: 'short', day: 'numeric'
+  });
 }
 
 function fmtNum(n) {
