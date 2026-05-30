@@ -653,10 +653,6 @@ function bindEvents() {
   document.getElementById('typeFilter').addEventListener('change', render);
   document.getElementById('liverFilter').addEventListener('change', render);
 
-  document.getElementById('modalOverlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeModal();
-  });
-
   document.getElementById('importFileInput').addEventListener('change', e => {
     if (e.target.files[0]) importJson(e.target.files[0]);
     e.target.value = '';

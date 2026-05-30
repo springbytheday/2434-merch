@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Merch Archive</title>
+  <title>Speciale Archive</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -20,7 +20,7 @@
   <div id="appPage" style="display:none">
 
     <header class="site-header">
-      <span class="logo">Merch<span>Archive</span></span>
+      <span class="logo">Speciale <span>Archive</span></span>
       <div class="header-actions">
 
         <!-- Language toggle 
@@ -244,7 +244,7 @@
     <div class="modal">
       <div class="modal-header">
         <span class="modal-title" id="modalTitle"></span>
-        <button class="modal-close" onclick="closeModal()">
+        <button class="modal-close" onclick="closeModal(),setSaveLoading(false);">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
@@ -291,7 +291,7 @@
         </form>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" id="cancelBtn" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-ghost" id="cancelBtn" onclick="closeModal(),setSaveLoading(false);">Cancel</button>
         <button class="btn btn-primary" id="saveBtn" onclick="saveItem()">Save</button>
       </div>
     </div>
