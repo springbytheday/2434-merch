@@ -553,6 +553,15 @@ function applyHeaderLoggedOut() {
 /* ══════════════════════════════════════════════════════
    UTILITY
    ══════════════════════════════════════════════════════ */
+function toggleReveal(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const isHidden = input.type === 'password';
+  input.type = isHidden ? 'text' : 'password';
+  btn.querySelector('.eye-show').style.display = isHidden ? 'none' : '';
+  btn.querySelector('.eye-hide').style.display = isHidden ? '' : 'none';
+  btn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+}
+
 function setView(v) {
   currentView = v;
   document.getElementById('viewGrid').classList.toggle('active',  v === 'grid');

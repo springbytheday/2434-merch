@@ -301,15 +301,17 @@ select.filter-select:focus { border-color: var(--accent); }
 
 .card-image {
   width: 100%;
-  aspect-ratio: 3/4;
-  object-fit: cover;
+  height: 220px;
+  object-fit: contain;
+  object-position: center;
   display: block;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
+  padding: .5rem;
 }
 .card-image-placeholder {
   width: 100%;
-  aspect-ratio: 3/4;
+  height: 220px;
   background: var(--bg);
   display: flex;
   flex-direction: column;
@@ -481,7 +483,7 @@ td { padding: .75rem 1rem; border-bottom: 1px solid var(--border); vertical-alig
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: var(--bg); }
 .table-thumb {
-  width: 36px; height: 48px;
+  width: 64px; height: 48px;
   object-fit: cover;
   border-radius: 4px;
   border: 1px solid var(--border);
@@ -511,6 +513,30 @@ tr:hover td { background: var(--bg); }
 .toast.toast-error { background: var(--danger); }
 @keyframes slideUp { from { transform:translateY(8px); opacity:0; } to { transform:none; opacity:1; } }
 @keyframes fadeOut { to { opacity:0; transform:translateY(-4px); } }
+
+/* ── Password reveal ──────────────────────────────────── */
+.input-reveal {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-reveal input {
+  flex: 1;
+  padding-right: 2.5rem;
+}
+.reveal-btn {
+  position: absolute;
+  right: .65rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color var(--transition);
+}
+.reveal-btn:hover { color: var(--text); }
 
 /* ── Loading ──────────────────────────────────────────── */
 .loading-screen {
