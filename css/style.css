@@ -561,6 +561,110 @@ tr:hover td { background: var(--bg); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+
+/* ── Cheki card ───────────────────────────────────────── */
+.cheki-variants-wrap {
+  margin-top: .75rem;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+.cheki-variant-block { display: flex; flex-direction: column; gap: .35rem; }
+.cheki-variant-label {
+  font-size: .65rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+}
+.cheki-dots-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.cheki-dot {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 2.5px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .15s, box-shadow .15s;
+  flex-shrink: 0;
+}
+.cheki-dot:hover { transform: scale(1.18); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+
+.cheki-mini-stats {
+  display: flex;
+  gap: 6px;
+  margin-top: .75rem;
+}
+.cheki-mini-stat {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 6px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.cheki-mini-val { font-size: .95rem; font-weight: 600; color: var(--text); }
+.cheki-mini-lbl { font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+
+/* ── Card notes section ───────────────────────────────── */
+.card-notes-section {
+  margin-top: .65rem;
+  border-top: 1px solid var(--border);
+  padding-top: .65rem;
+}
+.card-note-input {
+  width: 100%;
+  padding: .5rem .65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-family: inherit;
+  font-size: .78rem;
+  color: var(--text);
+  resize: none;
+  outline: none;
+  min-height: 58px;
+  line-height: 1.5;
+  transition: border-color var(--transition);
+}
+.card-note-input:focus { border-color: var(--accent); background: #fff; }
+.card-note-input::placeholder { color: var(--muted); }
+.note-saved {
+  font-size: .7rem;
+  color: var(--owned);
+  opacity: 0;
+  transition: opacity .3s;
+  display: block;
+  margin-top: 3px;
+}
+
+/* ── Liver Registry modal ─────────────────────────────── */
+.registry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .65rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: .875rem;
+}
+.registry-row:last-child { border-bottom: none; }
+.registry-swatch {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(0,0,0,.08);
+  flex-shrink: 0;
+}
+.registry-color-input {
+  width: 36px; height: 28px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 2px;
+}
+
 /* ── Responsive ───────────────────────────────────────── */
 @media (max-width: 640px) {
   .site-header { padding: 0 1rem; }

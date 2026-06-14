@@ -10,13 +10,16 @@ window._sb = sb;
 /* ── App state ────────────────────────────────────────── */
 let currentUser  = null;   // null = logged out (guest)
 let isSuperuser  = false;
-let allItems     = [];
+let allItems = [];
+let liverRegistry  = {};   // [NEW] { name: color }
 let userStatuses = {};     // only populated when logged in
+let chekiStatuses  = {};   // [NEW] { merch_id: { variant: { member: 'owned'|'wishlist' } } }
 let editingId    = null;
 let currentView  = 'grid';
 
 const TYPE_OPTIONS     = ['Acrylic Stand','Cheki Card','Plushie','Tapestry','Keychain','Pin Badge','Trading Card','Fan Book','Voice Pack','Other'];
-const CURRENCY_OPTIONS = ['JPY','USD','EUR','GBP','AUD','CAD','SGD','TWD','KRW'];
+const CURRENCY_OPTIONS = ['JPY', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'SGD', 'TWD', 'KRW'];
+const DEFAULT_LIVER_COLOR = '#8a8780'; // [NEW] fallback dot color
 
 /* ══════════════════════════════════════════════════════
    BOOTSTRAP - load merch immediately, auth is optional
@@ -26,7 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   applyStaticStrings();
 
-  await loadMerch();
+  await Promise.all([loadMerch(), loadLiverRegistry()]); // [CHANGED] added loadLiverRegistry()
 
   const { data: { session } } = await sb.auth.getSession();
   if (session) await onSignedIn(session.user);
@@ -77,15 +80,10 @@ async function handleLogin() {
   if (!username || !password) return showAuthError(t('errLoginFields'));
 
   setAuthLoading('loginBtn', true);
-  const { error } = await sb.auth.signInWithPassword({
-    email: usernameToEmail(username), password,
-  });
+  const { error } = await sb.auth.signInWithPassword({ email: usernameToEmail(username), password });
   setAuthLoading('loginBtn', false);
 
-  if (error) {
-    if (error.message.includes('Invalid login')) showAuthError(t('errLoginWrong'));
-    else showAuthError(error.message);
-  }
+  if (error) showAuthError(error.message.includes('Invalid login') ? t('errLoginWrong') : error.message);
 }
 
 async function handleSignup() {
@@ -127,7 +125,7 @@ async function onSignedIn(user) {
     || user.email.replace('@speciale.co', '');
   isSuperuser = user.email === usernameToEmail(SUPERUSER_USERNAME);
 
-  await loadUserStatuses();
+await Promise.all([loadUserStatuses(), loadChekiStatuses()]); // [CHANGED] added loadChekiStatuses()
   applyHeaderLoggedIn();
   closeAuthModal();
   render();
@@ -137,6 +135,7 @@ function onSignedOut() {
   currentUser  = null;
   isSuperuser  = false;
   userStatuses = {};
+  chekiStatuses = {}; // [NEW] reset cheki statuses on sign out
   applyHeaderLoggedOut();
   render();
 }
@@ -161,6 +160,19 @@ async function loadMerch() {
   render();
 }
 
+// [NEW] Load liver name→color map from Supabase
+async function loadLiverRegistry() {
+  const { data, error } = await sb.from('livers').select('name, color').order('name');
+  if (error) return;
+  liverRegistry = {};
+  (data || []).forEach(l => { liverRegistry[l.name] = l.color; });
+}
+
+// [NEW] Look up a liver's color, falling back to grey
+function getLiverColor(name) {
+  return liverRegistry[name] || DEFAULT_LIVER_COLOR;
+}
+
 async function loadUserStatuses() {
   if (!currentUser) return;
   const { data, error } = await sb
@@ -172,6 +184,19 @@ async function loadUserStatuses() {
   userStatuses = {};
   (data || []).forEach(s => {
     userStatuses[s.merch_id] = { status: s.status, notes: s.notes || '' };
+  });
+}
+
+// [NEW] Load per-dot cheki statuses for logged-in user
+async function loadChekiStatuses() {
+  if (!currentUser) return;
+  const { data, error } = await sb.from('user_cheki_statuses').select('merch_id, member, variant, status').eq('user_id', currentUser.id);
+  if (error) return;
+  chekiStatuses = {};
+  (data || []).forEach(r => {
+    if (!chekiStatuses[r.merch_id]) chekiStatuses[r.merch_id] = {};
+    if (!chekiStatuses[r.merch_id][r.variant]) chekiStatuses[r.merch_id][r.variant] = {};
+    chekiStatuses[r.merch_id][r.variant][r.member] = r.status;
   });
 }
 
@@ -196,6 +221,34 @@ async function cycleStatus(itemId) {
       );
 
   if (error) { toast(t('statusError'), true); await loadUserStatuses(); render(); }
+}
+
+// [NEW] Cycle a single cheki dot: none → owned → wishlist → none
+async function cycleChekiDot(itemId, variant, member) {
+  if (!currentUser) { openAuthModal('login'); return; }
+  if (!chekiStatuses[itemId]) chekiStatuses[itemId] = {};
+  if (!chekiStatuses[itemId][variant]) chekiStatuses[itemId][variant] = {};
+  const current = chekiStatuses[itemId][variant][member] || 'none';
+  const next    = current === 'none' ? 'owned' : current === 'owned' ? 'wishlist' : 'none';
+  chekiStatuses[itemId][variant][member] = next;
+  rerenderChekiCard(itemId); // optimistic: replace just this card in DOM
+  const { error } = next === 'none'
+    ? await sb.from('user_cheki_statuses').delete()
+        .eq('user_id', currentUser.id).eq('merch_id', itemId).eq('variant', variant).eq('member', member)
+    : await sb.from('user_cheki_statuses').upsert(
+        { user_id: currentUser.id, merch_id: itemId, variant, member, status: next },
+        { onConflict: 'user_id,merch_id,variant,member' }
+      );
+  if (error) { toast(t('statusError'), true); await loadChekiStatuses(); render(); }
+}
+ 
+// [NEW] Replace just one cheki card in the DOM without re-rendering everything
+function rerenderChekiCard(itemId) {
+  const item = allItems.find(i => i.id === itemId);
+  if (!item) return;
+  const existing = document.querySelector(`.cheki-card[data-id="${itemId}"]`);
+  if (!existing) return;
+  existing.replaceWith(buildChekiCard(item));
 }
 
 /* ── Save note (debounced, called on textarea input) ──── */
@@ -235,11 +288,13 @@ function showNoteSaved(itemId) {
 }
 
 /* ── Superuser: add / edit / delete ──────────────────── */
+
 async function saveItem() {
   const series = document.getElementById('fSeries').value.trim();
   if (!series) { document.getElementById('fSeries').focus(); return; }
   setSaveLoading(true);
 
+  const isCheki = document.getElementById('fType').value === 'Cheki Card'; // [NEW]
   const payload = {
     series:    series,
     liver:   document.getElementById('fLiver').value.trim(),
@@ -247,7 +302,9 @@ async function saveItem() {
     cost:     parseFloat(document.getElementById('fCost').value) || 0,
     currency: document.getElementById('fCurrency').value,
     release_date: document.getElementById('fReleaseDate').value || null,
-    image:    document.getElementById('fImage').value.trim(),
+    image: document.getElementById('fImage').value.trim(),
+    cheki_members:   isCheki ? parseList(document.getElementById('fChekiMembers').value) : null,  // [NEW]
+    cheki_variants:  isCheki ? parseList(document.getElementById('fChekiVariants').value) : null, // [NEW]
   };
 
   const { error } = editingId
@@ -260,6 +317,11 @@ async function saveItem() {
   toast(editingId ? t('updatedMsg') : t('addedMsg'));
   closeModal();
   await loadMerch();
+}
+
+// [NEW] Parse "Nagisa, Kuzuha, Lize" → ["Nagisa","Kuzuha","Lize"]
+function parseList(str) {
+  return str.split(',').map(s => s.trim()).filter(Boolean);
 }
 
 async function deleteItem(id) {
@@ -294,6 +356,65 @@ function importJson(file) {
     }
   };
   reader.readAsText(file);
+}
+
+/* ══════════════════════════════════════════════════════
+   LIVER REGISTRY (superuser) — [NEW]
+   ══════════════════════════════════════════════════════ */
+function openRegistry() {
+  renderRegistryModal();
+  document.getElementById('registryOverlay').classList.add('open');
+}
+function closeRegistry() {
+  document.getElementById('registryOverlay').classList.remove('open');
+}
+ 
+function renderRegistryModal() {
+  const list = document.getElementById('registryList');
+  const livers = Object.entries(liverRegistry).sort((a,b) => a[0].localeCompare(b[0]));
+  list.innerHTML = livers.length === 0
+    ? `<div style="padding:1rem;text-align:center;color:var(--muted);font-size:.85rem">No livers added yet</div>`
+    : livers.map(([name, color]) => `
+      <div class="registry-row">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="registry-swatch" style="background:${color}"></div>
+          <span>${name}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="color" value="${color}" class="registry-color-input"
+            oninput="updateLiverColor('${name}', this.value)">
+          <button class="btn btn-danger btn-sm" onclick="deleteLiver('${name}')">✕</button>
+        </div>
+      </div>`).join('');
+}
+ 
+async function addLiver() {
+  const name  = document.getElementById('newLiverName').value.trim();
+  const color = document.getElementById('newLiverColor').value;
+  if (!name) return;
+  const { error } = await sb.from('livers').upsert({ name, color }, { onConflict: 'name' });
+  if (error) { toast('Failed to add liver', true); return; }
+  liverRegistry[name] = color;
+  document.getElementById('newLiverName').value = '';
+  renderRegistryModal();
+  render();
+  toast(`${name} added`);
+}
+ 
+async function updateLiverColor(name, color) {
+  liverRegistry[name] = color;
+  const { error } = await sb.from('livers').update({ color }).eq('name', name);
+  if (error) toast('Failed to update color', true);
+  else render();
+}
+ 
+async function deleteLiver(name) {
+  if (!confirm(`Remove ${name} from registry?`)) return;
+  const { error } = await sb.from('livers').delete().eq('name', name);
+  if (error) { toast('Failed to delete', true); return; }
+  delete liverRegistry[name];
+  renderRegistryModal();
+  render();
 }
 
 /* ══════════════════════════════════════════════════════
@@ -358,12 +479,14 @@ function renderGrid(items) {
   if (!items.length) {
     grid.innerHTML = `<div class="empty-state"><p>${t('noItems')}</p><p>${t('noItemsSub')}</p></div>`;
   } else {
-    items.forEach(item => grid.appendChild(createCard(item)));
+    items.forEach(item => grid.appendChild(
+    // [CHANGED] route cheki items to their own card builder
+      item.type === 'Cheki Card' ? buildChekiCard(item) : buildRegularCard(item)));
   }
   container.appendChild(grid);
 }
 
-function createCard(item) {
+function buildRegularCard(item) {
   const entry       = userStatuses[item.id] || { status: 'none', notes: '' };
   const myStatus    = entry.status;
   const myNotes     = entry.notes || '';
@@ -425,6 +548,93 @@ function createCard(item) {
     <button class="status-toggle ${toggleClass}" onclick="cycleStatus(${item.id})">
       ${toggleLabel} ${toggleHint}
     </button>
+    ${superActions}`;
+  return card;
+}
+
+/* ── Cheki card — [NEW] ───────────────────────────────── */
+function buildChekiCard(item) {
+  const members  = item.cheki_members  || [];
+  const variants = item.cheki_variants || ['Normal','Rare'];
+  const entry    = userStatuses[item.id] || { status: 'none', notes: '' };
+  const myNotes  = entry.notes || '';
+ 
+  // Count dots
+  let ownedCount = 0, wishCount = 0;
+  const totalDots = members.length * variants.length;
+  variants.forEach(v => {
+    members.forEach(m => {
+      const s = chekiStatuses[item.id]?.[v]?.[m] || 'none';
+      if (s === 'owned')    ownedCount++;
+      if (s === 'wishlist') wishCount++;
+    });
+  });
+ 
+  const variantRows = variants.map(variant => {
+    const dots = members.map(member => {
+      const status = chekiStatuses[item.id]?.[variant]?.[member] || 'none';
+      const color  = getLiverColor(member);
+      let dotStyle, dotInner = '';
+      if (status === 'owned') {
+        dotStyle = `background:${color};border-color:${color};`;
+        dotInner = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>`;
+      } else if (status === 'wishlist') {
+        dotStyle = `background:transparent;border-color:${color};`;
+        dotInner = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+      } else {
+        dotStyle = 'background:var(--bg);border-color:var(--border);';
+      }
+      return `<div class="cheki-dot" style="${dotStyle}" title="${member} — ${variant}"
+        onclick="cycleChekiDot(${item.id},'${variant}','${member}')">
+        ${dotInner}
+      </div>`;
+    }).join('');
+    return `<div class="cheki-variant-block">
+      <div class="cheki-variant-label">${variant}</div>
+      <div class="cheki-dots-row">${dots}</div>
+    </div>`;
+  }).join('');
+ 
+  const imgHtml = item.image
+    ? `<img class="card-image" src="${item.image}" alt="${item.liver}" loading="lazy">`
+    : `<div class="card-image-placeholder">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span>${t('noImage')}</span>
+      </div>`;
+ 
+  const notesHtml = currentUser ? `
+    <div class="card-notes-section">
+      <textarea class="card-note-input" placeholder="${t('notesPlaceholder')}"
+        oninput="onNoteInput(${item.id}, this.value)">${myNotes}</textarea>
+      <span class="note-saved" data-id="${item.id}">${t('noteSaved')}</span>
+    </div>` : '';
+ 
+  const superActions = isSuperuser ? `
+    <div class="card-actions">
+      <button class="btn btn-ghost btn-sm" onclick="openEdit(${item.id})">${t('edit')}</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">${t('delete')}</button>
+    </div>` : '';
+ 
+  const card = document.createElement('div');
+  card.className = 'card cheki-card';
+  card.dataset.id = item.id;
+  card.innerHTML = `
+    ${imgHtml}
+    <div class="card-body">
+      <div class="card-badges">
+        <span class="badge badge-type">${tType(item.type)}</span>
+      </div>
+      <div class="card-name">${item.liver}</div>
+      ${item.series       ? `<div class="card-group">${item.series}</div>` : ''}
+      ${item.cost         ? `<div class="card-cost">${fmtNum(item.cost)} ${item.currency || 'JPY'}</div>` : ''}
+      <div class="cheki-variants-wrap">${variantRows}</div>
+      <div class="cheki-mini-stats">
+        <div class="cheki-mini-stat"><span class="cheki-mini-val">${ownedCount}</span><span class="cheki-mini-lbl">${t('owned')}</span></div>
+        <div class="cheki-mini-stat"><span class="cheki-mini-val">${wishCount}</span><span class="cheki-mini-lbl">${t('wishlist')}</span></div>
+        <div class="cheki-mini-stat"><span class="cheki-mini-val">${totalDots}</span><span class="cheki-mini-lbl">${t('total')}</span></div>
+      </div>
+      ${notesHtml}
+    </div>
     ${superActions}`;
   return card;
 }
@@ -510,11 +720,20 @@ function openEdit(id) {
   document.getElementById('fReleaseDate').value = item.release_date || '';
   document.getElementById('fCost').value     = item.cost     || '';
   document.getElementById('fCurrency').value = item.currency || 'JPY';
+  document.getElementById('fChekiMembers').value     = (item.cheki_members  || []).join(', ');
+  document.getElementById('fChekiVariants').value = (item.cheki_variants || []).join(', ');
+  toggleChekiFields();
   document.getElementById('modalOverlay').classList.add('open');
 }
 
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('open');
+}
+
+// [NEW] Show/hide cheki-specific fields based on type select
+function toggleChekiFields() {
+  const isCheki = document.getElementById('fType').value === 'Cheki Card';
+  document.getElementById('chekiFields').style.display = isCheki ? '' : 'none';
 }
 
 /* ══════════════════════════════════════════════════════
@@ -530,7 +749,8 @@ function applyHeaderLoggedIn() {
   document.getElementById('superBadge').style.display   = isSuperuser ? '' : 'none';
   document.getElementById('btnAdd').style.display       = isSuperuser ? '' : 'none';
   document.getElementById('btnImport').style.display    = isSuperuser ? '' : 'none';
-  document.getElementById('btnExport').style.display    = isSuperuser ? '' : 'none';
+  document.getElementById('btnExport').style.display = isSuperuser ? '' : 'none';
+  document.getElementById('btnRegistry').style.display  = isSuperuser ? '' : 'none'; 
   // Re-apply translated strings that vary by login state
   document.getElementById('superBadge').textContent     = t('ownerBadge');
   document.getElementById('btnAdd').textContent         = t('addItem');
@@ -549,7 +769,8 @@ function applyHeaderLoggedOut() {
   document.getElementById('superBadge').style.display   = 'none';
   document.getElementById('btnAdd').style.display       = 'none';
   document.getElementById('btnImport').style.display    = 'none';
-  document.getElementById('btnExport').style.display    = 'none';
+  document.getElementById('btnExport').style.display = 'none';
+  document.getElementById('btnRegistry').style.display  = 'none';
   document.getElementById('btnSignIn').textContent      = t('signIn');
   document.getElementById('btnSignUp').textContent = t('createAccount');
   document.getElementById('statItemOwned').classList.remove('stat-item-clickable', 'active');
@@ -652,6 +873,7 @@ function bindEvents() {
   document.getElementById('statusFilter').addEventListener('change', render);
   document.getElementById('typeFilter').addEventListener('change', render);
   document.getElementById('liverFilter').addEventListener('change', render);
+  document.getElementById('fType').addEventListener('change', toggleChekiFields);
 
   document.getElementById('importFileInput').addEventListener('change', e => {
     if (e.target.files[0]) importJson(e.target.files[0]);
@@ -667,4 +889,5 @@ function bindEvents() {
       if (e.key === 'Enter') handleLogin();
     });
   });
+  document.getElementById('newLiverName').addEventListener('keydown', e => { if (e.key === 'Enter') addLiver(); });
 }
