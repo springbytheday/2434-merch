@@ -624,8 +624,8 @@ function buildChekiCard(item) {
       <div class="card-badges">
         <span class="badge badge-type">${tType(item.type)}</span>
       </div>
-      <div class="card-name">${item.liver}</div>
-      ${item.series       ? `<div class="card-group">${item.series}</div>` : ''}
+      <div class="card-name">${item.series}</div>
+      ${item.series       ? `<div class="card-group">${item.liver}</div>` : ''}
       ${item.cost         ? `<div class="card-cost">${fmtNum(item.cost)} ${item.currency || 'JPY'}</div>` : ''}
       <div class="cheki-variants-wrap">${variantRows}</div>
       <div class="cheki-mini-stats">
