@@ -435,13 +435,36 @@ function getFiltered() {
   const liverFilter  = document.getElementById('liverFilter').value;
 
   return allItems.filter(item => {
-    const myStatus = (userStatuses[item.id]?.status) || 'none';
-    const matchQ      = !q || (item.liver||'').toLowerCase().includes(q)
-                          || (item.series||'').toLowerCase().includes(q);
-    const matchStatus = !statusFilter || myStatus === statusFilter;
-    const matchType   = !typeFilter || item.type === typeFilter;
-    const matchLiver  = !liverFilter || item.liver === liverFilter;
-    return matchQ && matchStatus && matchType && matchLiver;
+    const isCheki = item.type === 'Cheki Card';
+
+    // ── Search ──────────────────────────────────────────
+    // [CHANGED] for cheki, also search member names
+    const matchQ = !q
+      || (item.liver || '').toLowerCase().includes(q)
+      || (item.series || '').toLowerCase().includes(q)
+      || (isCheki && (item.cheki_members || []).some(m => m.toLowerCase().includes(q)));
+
+    // ── Status filter ────────────────────────────────────
+    // [CHANGED] cheki: match if ANY dot has the filtered status
+    let matchStatus;
+    if (!statusFilter) {
+      matchStatus = true;
+    } else if (isCheki) {
+      const variants = item.cheki_variants || [];
+      const members = item.cheki_members || [];
+      matchStatus = variants.some(v =>
+        members.some(m => (chekiStatuses[item.id]?.[v]?.[m] || 'none') === statusFilter)
+      );
+    } else {
+      const myStatus = (userStatuses[item.id]?.status) || 'none';
+      matchStatus = myStatus === statusFilter;
+    }
+
+    // ── Type & group ─────────────────────────────────────
+    const matchType = !typeFilter || item.type === typeFilter;
+    const matchGroup = !liverFilter || item.liver === liverFilter;
+
+    return matchQ && matchStatus && matchType && matchGroup;
   });
 }
 
@@ -502,18 +525,9 @@ function buildRegularCard(item) {
         <span>${t('noImage')}</span>
       </div>`;
 
-  const statusBadge = myStatus !== 'none'
-    ? `<span class="badge badge-${myStatus}">${t(myStatus)}</span>`
-    : '';
-
-  let toggleLabel, toggleHint;
-  if (!currentUser) {
-    toggleLabel = t('signInToTrack');
-    toggleHint  = '';
-  } else {
-    toggleLabel = myStatus === 'none' ? t('trackHint') : t(myStatus);
-    toggleHint  = `<span style="font-size:.7rem;opacity:.6">${t('cycleHint')}</span>`;
-  }
+  const statusBadge = myStatus !== 'none' ? `<span class="badge badge-${myStatus}">${t(myStatus)}</span>` : '';
+  const toggleLabel = !currentUser ? t('signInToTrack') : myStatus === 'none' ? t('trackHint') : t(myStatus);
+  const toggleHint  = currentUser ? `<span style="font-size:.7rem;opacity:.6">${t('cycleHint')}</span>` : '';
 
   // Notes section — only shown when logged in
   const notesHtml = currentUser ? `
@@ -669,23 +683,28 @@ function renderTable(items) {
         ${items.map(item => {
           const myStatus    = (userStatuses[item.id]?.status) || 'none';
           const toggleClass = myStatus === 'owned' ? 'is-owned' : myStatus === 'wishlist' ? 'is-wishlist' : '';
-          const toggleLabel = myStatus === 'owned' ? t('owned') : myStatus === 'wishlist' ? t('wishlist') : t('trackHint');
-          return `
-          <tr>
-            <td>${item.image
-              ? `<img class="table-thumb" src="${item.image}" alt="">`
-              : `<div class="table-thumb-placeholder">?</div>`}
-            </td>
-            <td><strong>${item.series}</strong></td>
-            <td>${item.liver || '—'}</td>
-            <td><span class="badge badge-type">${tType(item.type)}</span></td>
-            ${loggedIn ? `<td>
-              <button class="status-toggle ${toggleClass}"
+          const isCheki     = item.type === 'Cheki Card';
+          const members     = item.cheki_members || [];
+          const variants    = item.cheki_variants || [];
+          let ownedDots = 0, totalDots = members.length * variants.length;
+          if (isCheki) {
+            variants.forEach(v => members.forEach(m => {
+              if ((chekiStatuses[item.id]?.[v]?.[m]) === 'owned') ownedDots++;
+            }));
+          }
+          const statusCell = loggedIn ? (isCheki
+            ? `<td><span style="font-size:.8rem;color:var(--muted)">${ownedDots}/${totalDots} owned</span></td>`
+            : `<td><button class="status-toggle ${toggleClass}"
                 style="border-radius:999px;padding:.2rem .7rem;font-size:.72rem;width:auto"
                 onclick="cycleStatus(${item.id})">
-                ${toggleLabel}
-              </button>
-            </td>` : ''}
+                ${myStatus === 'owned' ? t('owned') : myStatus === 'wishlist' ? t('wishlist') : t('trackHint')}
+              </button></td>`) : '';
+          return `<tr>
+            <td>${item.image ? `<img class="table-thumb" src="${item.image}" alt="">` : `<div class="table-thumb-placeholder">?</div>`}</td>
+            <td><strong>${item.liver}</strong></td>
+            <td>${item.series || '—'}</td>
+            <td><span class="badge badge-type">${tType(item.type)}</span></td>
+            ${statusCell}
             <td style="white-space:nowrap">${item.cost ? `${fmtNum(item.cost)} ${item.currency || 'JPY'}` : '—'}</td>
             ${isSuperuser ? `<td style="white-space:nowrap">
               <button class="btn btn-ghost btn-sm" onclick="openEdit(${item.id})">${t('edit')}</button>
@@ -705,7 +724,9 @@ function openAdd() {
   editingId = null;
   document.getElementById('modalTitle').textContent = t('addMerch');
   document.getElementById('merch-form').reset();
-  document.getElementById('modalOverlay').classList.add('open');
+  document.getElementById('fChekiMembers').value = ''; // [CHANGED] clear before picker renders
+  toggleChekiFields();
+
 }
 
 function openEdit(id) {
@@ -730,10 +751,142 @@ function closeModal() {
   document.getElementById('modalOverlay').classList.remove('open');
 }
 
+// Tracks selected members and renders chips + input inside #memberPicker
+let _pickerSelected = [];
+
+function renderMemberPicker(selected = []) {
+  _pickerSelected = [...selected];
+  _buildPickerDOM();
+}
+
+function _buildPickerDOM() {
+  const picker = document.getElementById('memberPicker');
+  picker.innerHTML = '';
+
+  // Chips for selected members
+  _pickerSelected.forEach(name => {
+    const color = getLiverColor(name);
+    const chip = document.createElement('span');
+    chip.className = 'member-chip';
+    chip.style.cssText = `background:${color};border-color:${color};`;
+    chip.innerHTML = `${name}<span class="chip-remove" onclick="_removeChip('${name}')">✕</span>`;
+    picker.appendChild(chip);
+  });
+
+  // Autocomplete input
+  const input = document.createElement('input');
+  input.id = 'memberSearchInput';
+  input.className = 'member-search-input';
+  input.placeholder = _pickerSelected.length === 0 ? 'Type a liver name…' : '';
+  input.autocomplete = 'off';
+  input.addEventListener('input', _onPickerInput);
+  input.addEventListener('keydown', _onPickerKeydown);
+  input.addEventListener('focus', () => { if (input.value) _showDropdown(input.value); });
+  picker.appendChild(input);
+
+  syncMemberInput();
+}
+
+function _onPickerInput(e) {
+  const q = e.target.value;
+  if (q.trim()) _showDropdown(q);
+  else _hideDropdown();
+}
+
+function _showDropdown(q) {
+  _hideDropdown();
+  const suggestions = Object.keys(liverRegistry)
+    .filter(name => !_pickerSelected.includes(name) && name.toLowerCase().includes(q.toLowerCase()))
+    .sort();
+
+  if (!suggestions.length) return;
+
+  const drop = document.createElement('div');
+  drop.id = 'memberDropdown';
+  drop.className = 'member-dropdown';
+
+  suggestions.forEach((name, i) => {
+    const color = getLiverColor(name);
+    const item = document.createElement('div');
+    item.className = 'member-dropdown-item';
+    item.dataset.idx = i;
+    item.innerHTML = `<span class="dropdown-dot" style="background:${color}"></span>${name}`;
+    item.addEventListener('mousedown', e => { e.preventDefault(); _addChip(name); });
+    item.addEventListener('mouseenter', () => _setActiveDropdownItem(i));
+    drop.appendChild(item);
+  });
+
+  // Position below the picker box
+  const picker = document.getElementById('memberPicker');
+  picker.parentElement.style.position = 'relative';
+  picker.parentElement.appendChild(drop);
+}
+
+function _hideDropdown() {
+  document.getElementById('memberDropdown')?.remove();
+}
+
+function _setActiveDropdownItem(idx) {
+  document.querySelectorAll('.member-dropdown-item').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+}
+
+function _getActiveIdx() {
+  const items = [...document.querySelectorAll('.member-dropdown-item')];
+  return items.findIndex(el => el.classList.contains('active'));
+}
+
+function _onPickerKeydown(e) {
+  const items = [...document.querySelectorAll('.member-dropdown-item')];
+  const activeIdx = _getActiveIdx();
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _setActiveDropdownItem(Math.min(activeIdx + 1, items.length - 1));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _setActiveDropdownItem(Math.max(activeIdx - 1, 0));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (activeIdx >= 0 && items[activeIdx]) {
+      _addChip(items[activeIdx].textContent.trim());
+    }
+  } else if (e.key === 'Escape') {
+    _hideDropdown();
+  } else if (e.key === 'Backspace' && e.target.value === '' && _pickerSelected.length > 0) {
+    _removeChip(_pickerSelected[_pickerSelected.length - 1]);
+  }
+}
+
+function _addChip(name) {
+  if (!_pickerSelected.includes(name)) {
+    _pickerSelected.push(name);
+  }
+  _hideDropdown();
+  _buildPickerDOM();
+  // Re-focus input after adding
+  setTimeout(() => document.getElementById('memberSearchInput')?.focus(), 0);
+}
+
+function _removeChip(name) {
+  _pickerSelected = _pickerSelected.filter(n => n !== name);
+  _hideDropdown();
+  _buildPickerDOM();
+  setTimeout(() => document.getElementById('memberSearchInput')?.focus(), 0);
+}
+
+// [UNCHANGED] Sync selected list → hidden input for saveItem()
+function syncMemberInput() {
+  document.getElementById('fChekiMembers').value = _pickerSelected.join(', ');
+}
+
 // [NEW] Show/hide cheki-specific fields based on type select
 function toggleChekiFields() {
   const isCheki = document.getElementById('fType').value === 'Cheki Card';
   document.getElementById('chekiFields').style.display = isCheki ? '' : 'none';
+    if (isCheki) renderMemberPicker(parseList(document.getElementById('fChekiMembers').value));
+  else _hideDropdown();
 }
 
 /* ══════════════════════════════════════════════════════

@@ -298,9 +298,14 @@
               style="font-size:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.75rem">
               Cheki Set</div>
             <div class="form-group" style="margin-bottom:.75rem">
-              <label id="labelFChekiMembers">Members <span style="font-weight:300;color:var(--muted)">(comma
-                  separated)</span></label>
-              <input type="text" id="fChekiMembers" placeholder="Nagisa, Kuzuha, Lize, Alban, Fulgur">
+              <label id="labelFChekiMembers">Members</label>
+              <!-- [CHANGED] tag picker populated from liver registry -->
+              <div class="member-picker" id="memberPicker"></div>
+              <div style="font-size:.72rem;color:var(--muted);margin-top:.35rem">Type to search · select from dropdown ·
+                Backspace
+                to remove last</div>
+              <!-- hidden input still holds comma list for saveItem() -->
+              <input type="hidden" id="fChekiMembers">
             </div>
             <div class="form-group">
               <label id="labelFChekiVariants">Variants <span style="font-weight:300;color:var(--muted)">(comma
