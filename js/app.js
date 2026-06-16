@@ -460,11 +460,15 @@ function getFiltered() {
       matchStatus = myStatus === statusFilter;
     }
 
-    // ── Type & group ─────────────────────────────────────
-    const matchType = !typeFilter || item.type === typeFilter;
-    const matchGroup = !liverFilter || item.liver === liverFilter;
+    // ── Type & liver ─────────────────────────────────────
+    const matchType  = !typeFilter || item.type === typeFilter;
+    const matchLiver = !liverFilter
+      || item.liver === liverFilter
+      || (isCheki && (item.cheki_members || []).includes(liverFilter));
 
-    return matchQ && matchStatus && matchType && matchGroup;
+    console.log(matchLiver);
+
+    return matchQ && matchStatus && matchType && matchLiver;
   });
 }
 
@@ -480,15 +484,24 @@ function updateStats() {
 }
 
 function updateLiverFilter() {
-  const gf   = document.getElementById('liverFilter');
-  const prev = gf.value;
-  const livers = [...new Set(allItems.map(i => i.liver).filter(Boolean))].sort();
-  gf.innerHTML = `<option value="">${t('allLivers')}</option>`;
-  livers.forEach(g => {
+  const lf   = document.getElementById('liverFilter');
+  const prev = lf.value;
+ 
+  const liverNames = new Set();
+  allItems.forEach(item => {
+    if (item.liver) liverNames.add(item.liver);
+    if (item.type === 'Cheki Card') {
+      (item.cheki_members || []).forEach(m => liverNames.add(m));
+    }
+  });
+ 
+  const sorted = [...liverNames].sort();
+  lf.innerHTML = `<option value="">${t('allLivers')}</option>`;
+  sorted.forEach(name => {
     const o = document.createElement('option');
-    o.value = g; o.textContent = g;
-    if (g === prev) o.selected = true;
-    gf.appendChild(o);
+    o.value = name; o.textContent = name;
+    if (name === prev) o.selected = true;
+    lf.appendChild(o);
   });
 }
 
