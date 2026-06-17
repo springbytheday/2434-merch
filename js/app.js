@@ -466,8 +466,6 @@ function getFiltered() {
       || item.liver === liverFilter
       || (isCheki && (item.cheki_members || []).includes(liverFilter));
 
-    console.log(matchLiver);
-
     return matchQ && matchStatus && matchType && matchLiver;
   });
 }
@@ -737,6 +735,7 @@ function openAdd() {
   editingId = null;
   document.getElementById('modalTitle').textContent = t('addMerch');
   document.getElementById('merch-form').reset();
+  document.getElementById('modalOverlay').classList.add('open');
   document.getElementById('fChekiMembers').value = ''; // [CHANGED] clear before picker renders
   toggleChekiFields();
 
