@@ -587,7 +587,7 @@ function render() {
     return;
   }
   updateStats();
-  updateLiverFilter();
+  updateLiverFilter(currentGroup);
   const filtered = getFiltered();
   if (currentView === 'grid') renderGrid(filtered);
   else renderTable(filtered);
@@ -649,18 +649,11 @@ function updateStats() {
   updateStatActiveState();
 }
 
-function updateLiverFilter() {
+function updateLiverFilter(groupName) {
   const lf   = document.getElementById('liverFilter');
   const prev = lf.value;
  
-  const liverNames = new Set();
-  allItems.forEach(item => {
-    if (item.liver) liverNames.add(item.liver);
-    if (item.type === 'Cheki Card') {
-      (item.cheki_members || []).forEach(m => liverNames.add(m));
-    }
-  });
- 
+  const liverNames = new Set(getLiversInGroup(groupName));
   const sorted = [...liverNames].sort();
   lf.innerHTML = `<option value="">${t('allLivers')}</option>`;
   sorted.forEach(name => {
