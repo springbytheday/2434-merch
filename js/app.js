@@ -11,25 +11,32 @@ window._sb = sb;
 let currentUser  = null;   // null = logged out (guest)
 let isSuperuser  = false;
 let allItems = [];
-let liverRegistry  = {};   // [NEW] { name: color }
+let liverRegistry  = {};   // { name: { color, group_name } }
 let userStatuses = {};     // only populated when logged in
-let chekiStatuses  = {};   // [NEW] { merch_id: { variant: { member: 'owned'|'wishlist' } } }
+let chekiStatuses  = {};   // { merch_id: { variant: { member: 'owned'|'wishlist' } } }
 let editingId    = null;
-let currentView  = 'grid';
+let currentView = 'grid';
+let currentGroup   = null; // [2026-06-18 #9] currently selected group name
 
 const TYPE_OPTIONS     = ['Acrylic Stand','Cheki Card','Plushie','Tapestry','Keychain','Pin Badge','Trading Card','Fan Book','Voice Pack','Other'];
 const CURRENCY_OPTIONS = ['JPY', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'SGD', 'TWD', 'KRW'];
-const DEFAULT_LIVER_COLOR = '#8a8780'; // [NEW] fallback dot color
+const DEFAULT_LIVER_COLOR = '#8a8780'; // fallback dot color
 
 /* ══════════════════════════════════════════════════════
-   BOOTSTRAP - load merch immediately, auth is optional
+   BOOTSTRAP 
    ══════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   populateSelects();
   bindEvents();
   applyStaticStrings();
 
-  await Promise.all([loadMerch(), loadLiverRegistry()]); // [CHANGED] added loadLiverRegistry()
+  await Promise.all([loadMerch(), loadLiverRegistry()]); // added loadLiverRegistry()
+
+  // Listen for back/forward navigation
+  window.addEventListener('hashchange', () => {
+    handleRoute();
+    if (currentGroup) render();
+  });
 
   const { data: { session } } = await sb.auth.getSession();
   if (session) await onSignedIn(session.user);
@@ -105,14 +112,8 @@ async function handleSignup() {
   });
   setAuthLoading('signupBtn', false);
 
-  if (error) {
-    if (error.message.includes('already registered')) showAuthError(t('errUsernameTaken'));
-    else showAuthError(error.message);
-  } else {
-    showAuthSuccess(t('successSignup'));
-    switchTab('login');
-    document.getElementById('loginUsername').value = username;
-  }
+  if (error) showAuthError(error.message.includes('already registered') ? t('errUsernameTaken') : error.message);
+  else { showAuthSuccess(t('successSignup')); switchTab('login'); document.getElementById('loginUsername').value = username; }
 }
 
 async function handleLogout() {
@@ -125,7 +126,7 @@ async function onSignedIn(user) {
     || user.email.replace('@speciale.co', '');
   isSuperuser = user.email === usernameToEmail(SUPERUSER_USERNAME);
 
-await Promise.all([loadUserStatuses(), loadChekiStatuses()]); // [CHANGED] added loadChekiStatuses()
+await Promise.all([loadUserStatuses(), loadChekiStatuses()]); // added loadChekiStatuses()
   applyHeaderLoggedIn();
   closeAuthModal();
   render();
@@ -157,20 +158,165 @@ async function loadMerch() {
   // Show the app now — user can browse immediately
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('appPage').style.display = '';
+  renderSidebar();
+  handleRoute();
+}
+
+// Render sidebar group list
+function renderSidebar() {
+  const nav    = document.getElementById('sidebarNav');
+  const groups = getAllGroups();
+  nav.innerHTML = '';
+
+  if (!groups.length) {
+    nav.innerHTML = `<div style="padding:.6rem 1.25rem;font-size:.8rem;color:var(--muted)">No groups yet</div>`;
+    return;
+  }
+
+  groups.forEach(group => {
+    const count = allItems.filter(item => itemBelongsToGroup(item, group)).length;
+    const btn   = document.createElement('button');
+    btn.className = 'sidebar-item' + (currentGroup === group ? ' active' : '');
+    btn.innerHTML = `<span>${group}</span><span class="sidebar-item-count">${count}</span>`;
+    btn.onclick = () => navigateToGroup(group);
+    nav.appendChild(btn);
+  });
+}
+
+//  Navigate to a group — updates URL hash and renders
+function navigateToGroup(groupName) {
+  currentGroup = groupName;
+  location.hash = encodeURIComponent(groupName);
+  renderSidebar();
+  showItemView();
   render();
+  // Close sidebar on mobile after selecting
+  if (window.innerWidth <= 768) closeSidebar();
+}
+
+//  Handle URL hash on load / hashchange
+function handleRoute() {
+  const hash = decodeURIComponent(location.hash.slice(1));
+  const groups = getAllGroups();
+
+  if (hash && groups.includes(hash)) {
+    currentGroup = hash;
+    showItemView();
+  } else {
+    currentGroup = null;
+    showGroupHome();
+  }
+  renderSidebar();
+  if (currentGroup) render();
+}
+
+// Show the group selection home screen
+function showGroupHome() {
+  document.getElementById('groupHome').style.display = '';
+  document.getElementById('itemView').style.display  = 'none';
+  renderGroupHome();
+}
+
+//  Show the item grid/table view
+function showItemView() {
+  document.getElementById('groupHome').style.display = 'none';
+  document.getElementById('itemView').style.display  = '';
+}
+
+// Render group cards on the home screen
+function renderGroupHome() {
+  const grid   = document.getElementById('groupHomeGrid');
+  const groups = getAllGroups();
+  grid.innerHTML = '';
+
+  if (!groups.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>No groups yet</p><p>Add livers with a group name in the Liver Registry.</p></div>`;
+    return;
+  }
+
+  groups.forEach(group => {
+    const livers = getLiversInGroup(group);
+    const items  = allItems.filter(item => itemBelongsToGroup(item, group));
+
+    const card = document.createElement('div');
+    card.className = 'group-home-card';
+    card.onclick = () => navigateToGroup(group);
+
+    const dots = livers.slice(0, 12).map(name => {
+      const color = getLiverColor(name);
+      return `<div class="group-dot" style="background:${color}" title="${name}"></div>`;
+    }).join('');
+
+    card.innerHTML = `
+      <div class="group-home-card-name">${group}</div>
+      <div class="group-home-card-meta">${livers.length} liver${livers.length !== 1 ? 's' : ''} · ${items.length} item${items.length !== 1 ? 's' : ''}</div>
+      <div class="group-home-card-dots">${dots}</div>`;
+    grid.appendChild(card);
+  });
+}
+
+// Toggle mobile sidebar
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
 }
 
 // [NEW] Load liver name→color map from Supabase
 async function loadLiverRegistry() {
-  const { data, error } = await sb.from('livers').select('name, color').order('name');
+  const { data, error } = await sb.from('livers').select('name, color, group_name').order('name');
   if (error) return;
   liverRegistry = {};
-  (data || []).forEach(l => { liverRegistry[l.name] = l.color; });
+  (data || []).forEach(l => { liverRegistry[l.name] = { color: l.color, group_name: l.group_name || null }; });
 }
 
-// [NEW] Look up a liver's color, falling back to grey
+//  Look up a liver's color, falling back to grey
 function getLiverColor(name) {
-  return liverRegistry[name] || DEFAULT_LIVER_COLOR;
+  return liverRegistry[name] ?.color || DEFAULT_LIVER_COLOR;
+}
+
+// Get a liver's group name
+function getLiverGroup(name) {
+  return liverRegistry[name]?.group_name || null;
+}
+
+//  Get all unique group names from registry
+function getAllGroups() {
+  return [...new Set(
+    Object.values(liverRegistry)
+      .map(l => l.group_name)
+      .filter(Boolean)
+  )].sort();
+}
+
+// Get all liver names belonging to a group
+function getLiversInGroup(groupName) {
+  return Object.entries(liverRegistry)
+    .filter(([, v]) => v.group_name === groupName)
+    .map(([name]) => name);
+}
+
+//  Check if an item belongs to a group
+function itemBelongsToGroup(item, groupName) {
+  const groupLivers = getLiversInGroup(groupName);
+  if (item.type === 'Cheki Card') {
+    return (item.cheki_members || []).some(m => groupLivers.includes(m));
+  }
+  return groupLivers.includes(item.liver);
+}
+
+// Check if cheki member belongs to a group
+function memberBelongsToGroup(members, groupName) {
+  const groupLivers = getLiversInGroup(groupName);
+
+  const liversinCheki = groupLivers.filter(
+    liver => members.includes(liver)
+  )
+
+  return liversinCheki;
 }
 
 async function loadUserStatuses() {
@@ -204,9 +350,8 @@ async function loadChekiStatuses() {
 async function cycleStatus(itemId) {
   if (!currentUser) { openAuthModal('login'); return; }
 
-  const entry   = userStatuses[itemId] || { status: 'none', notes: '' };
-  const current = entry.status;
-  const next    = current === 'none' ? 'owned' : current === 'owned' ? 'wishlist' : 'none';
+  const entry = userStatuses[itemId] || { status: 'none', notes: '' };
+  const next    = entry.status === 'none' ? 'wishlist' : entry.status === 'wishlist' ? 'owned' : 'none';
 
   // Optimistic update — preserve notes
   userStatuses[itemId] = { status: next, notes: entry.notes };
@@ -229,7 +374,7 @@ async function cycleChekiDot(itemId, variant, member) {
   if (!chekiStatuses[itemId]) chekiStatuses[itemId] = {};
   if (!chekiStatuses[itemId][variant]) chekiStatuses[itemId][variant] = {};
   const current = chekiStatuses[itemId][variant][member] || 'none';
-  const next    = current === 'none' ? 'owned' : current === 'owned' ? 'wishlist' : 'none';
+  const next    = current === 'none' ? 'wishlist' : current === 'wishlist' ? 'owned' : 'none';
   chekiStatuses[itemId][variant][member] = next;
   rerenderChekiCard(itemId); // optimistic: replace just this card in DOM
   const { error } = next === 'none'
@@ -265,11 +410,7 @@ function onNoteInput(itemId, value) {
 
 async function saveNote(itemId, notes) {
   if (!currentUser) return;
-  console.log(itemId);
-  console.log(notes);
   const status = (userStatuses[itemId]?.status) || 'none';
-  console.log(status);
-
   const { error } = await sb.from('user_statuses').upsert(
     { user_id: currentUser.id, merch_id: itemId, status: status, notes: notes },
     { onConflict: 'user_id,merch_id' }
@@ -374,14 +515,20 @@ function renderRegistryModal() {
   const livers = Object.entries(liverRegistry).sort((a,b) => a[0].localeCompare(b[0]));
   list.innerHTML = livers.length === 0
     ? `<div style="padding:1rem;text-align:center;color:var(--muted);font-size:.85rem">No livers added yet</div>`
-    : livers.map(([name, color]) => `
+    : livers.map(([name, data]) => `
       <div class="registry-row">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div class="registry-swatch" style="background:${color}"></div>
-          <span>${name}</span>
+        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+          <div class="registry-swatch" style="background:${data.color}"></div>
+          <span style="font-size:.875rem;">${name}</span>
+          <!-- [2026-06-18 #13] Show group badge if set -->
+          ${data.group_name ? `<span style="font-size:.7rem;background:var(--accent-lt);color:#7a6030;padding:1px 7px;border-radius:999px;">${data.group_name}</span>` : ''}
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <input type="color" value="${color}" class="registry-color-input"
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <!-- [2026-06-18 #13] Inline group edit -->
+          <input type="text" value="${data.group_name || ''}" placeholder="Group…"
+            style="width:100px;padding:3px 7px;border:1px solid var(--border);border-radius:4px;font-size:.78rem;font-family:inherit;"
+            onchange="updateLiverGroup('${name}', this.value)">
+          <input type="color" value="${data.color}" class="registry-color-input"
             oninput="updateLiverColor('${name}', this.value)">
           <button class="btn btn-danger btn-sm" onclick="deleteLiver('${name}')">✕</button>
         </div>
@@ -390,23 +537,36 @@ function renderRegistryModal() {
  
 async function addLiver() {
   const name  = document.getElementById('newLiverName').value.trim();
+  const group = document.getElementById('newLiverGroup').value.trim() || null;
   const color = document.getElementById('newLiverColor').value;
   if (!name) return;
-  const { error } = await sb.from('livers').upsert({ name, color }, { onConflict: 'name' });
+  const { error } = await sb.from('livers').upsert({ name, color, group_name: group }, { onConflict: 'name' });
   if (error) { toast('Failed to add liver', true); return; }
-  liverRegistry[name] = color;
-  document.getElementById('newLiverName').value = '';
+  liverRegistry[name] = { color, group_name: group };
+  document.getElementById('newLiverName').value  = '';
+  document.getElementById('newLiverGroup').value = '';
   renderRegistryModal();
+  renderSidebar();
   render();
   toast(`${name} added`);
 }
  
 async function updateLiverColor(name, color) {
-  liverRegistry[name] = color;
+  liverRegistry[name] = { ...liverRegistry[name], color };
   const { error } = await sb.from('livers').update({ color }).eq('name', name);
   if (error) toast('Failed to update color', true);
-  else render();
+  else { renderRegistryModal(); render(); }
 }
+
+// New function to update a liver's group
+async function updateLiverGroup(name, group_name) {
+  const val = group_name.trim() || null;
+  liverRegistry[name] = { ...liverRegistry[name], group_name: val };
+  const { error } = await sb.from('livers').update({ group_name: val }).eq('name', name);
+  if (error) toast('Failed to update group', true);
+  else { renderRegistryModal(); renderSidebar(); renderGroupHome(); render(); }
+}
+
  
 async function deleteLiver(name) {
   if (!confirm(`Remove ${name} from registry?`)) return;
@@ -414,6 +574,7 @@ async function deleteLiver(name) {
   if (error) { toast('Failed to delete', true); return; }
   delete liverRegistry[name];
   renderRegistryModal();
+  renderSidebar();
   render();
 }
 
@@ -421,6 +582,10 @@ async function deleteLiver(name) {
    RENDER
    ══════════════════════════════════════════════════════ */
 function render() {
+    if (!currentGroup) {
+    renderGroupHome();
+    return;
+  }
   updateStats();
   updateLiverFilter();
   const filtered = getFiltered();
@@ -436,6 +601,9 @@ function getFiltered() {
 
   return allItems.filter(item => {
     const isCheki = item.type === 'Cheki Card';
+
+    // Filter by current group first
+    if (currentGroup && !itemBelongsToGroup(item, currentGroup)) return false;
 
     // ── Search ──────────────────────────────────────────
     // [CHANGED] for cheki, also search member names
@@ -579,7 +747,7 @@ function buildRegularCard(item) {
 
 /* ── Cheki card — [NEW] ───────────────────────────────── */
 function buildChekiCard(item) {
-  const members  = item.cheki_members  || [];
+  const members  = memberBelongsToGroup(item.cheki_members,currentGroup)  || [];
   const variants = item.cheki_variants || ['Normal','Rare'];
   const entry    = userStatuses[item.id] || { status: 'none', notes: '' };
   const myNotes  = entry.notes || '';

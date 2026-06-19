@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Speciale Archive</title>
+  <title>2434 Archive</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -18,9 +18,17 @@
 
   <!-- ── Main app (always visible after load) ───────────── -->
   <div id="appPage" style="display:none">
-
     <header class="site-header">
-      <span class="logo">Speciale <span>Archive</span></span>
+      <div style="display:flex;align-items:center;gap:.75rem;">
+        <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleSidebar()" aria-label="Toggle menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <span class="logo">2434 <span>Archive</span></span>
+      </div>
       <div class="header-actions">
 
         <!-- Language toggle 
@@ -52,7 +60,7 @@
             <polyline points="17 8 12 3 7 8" />
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
-          <span id="btnImport"></span>
+          <span id="btnImportLabel"></span>
         </button>
         <input type="file" id="importFileInput" accept=".json" style="display:none">
         <button class="btn btn-ghost" id="btnExport" style="display:none" onclick="exportJson()">
@@ -61,7 +69,7 @@
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          <span id="btnExport"></span>
+          <span id="btnExportLabel"></span>
         </button>
         <button class="btn btn-primary" id="btnAdd" style="display:none" onclick="openAdd()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -74,70 +82,94 @@
       </div>
     </header>
 
-    <main>
-      <!-- Stats -->
-      <div class="stats">
-        <div class="stat-item" id="statItemTotal" onclick="filterByStat('')">
-          <span class="stat-label" id="labelStatTotal">Total Items</span>
-          <span class="stat-value" id="statTotal">—</span>
-        </div>
-        <div class="stat-item stat-item-clickable" id="statItemOwned" onclick="filterByStat('owned')">
-          <span class="stat-label" id="labelStatOwned">My Owned</span>
-          <span class="stat-value" id="statOwned">—</span>
-        </div>
-        <div class="stat-item stat-item-clickable" id="statItemWishlist" onclick="filterByStat('wishlist')">
-          <span class="stat-label" id="labelStatWishlist">My Wishlist</span>
-          <span class="stat-value" id="statWishlist">—</span>
-        </div>
-      </div>
+    <div class="app-body">
 
-      <!-- Controls -->
-      <div class="controls">
-        <div class="search-wrap">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input type="text" id="searchInput" class="search-input">
+      <!-- Sidebar -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-inner">
+          <div class="sidebar-heading" id="sidebarHeading">Groups</div>
+          <nav class="sidebar-nav" id="sidebarNav">
+            <!-- populated by renderSidebar() -->
+          </nav>
         </div>
-        <select id="statusFilter" class="filter-select" style="display:none">
-          <option value="">All statuses</option>
-          <option value="owned">Owned</option>
-          <option value="wishlist">Wishlist</option>
-          <option value="none">Not tracked</option>
-        </select>
-        <select id="typeFilter" class="filter-select">
-          <option value="">All types</option>
-        </select>
-        <select id="liverFilter" class="filter-select">
-          <option value="">All livers</option>
-        </select>
-        <div class="view-toggle">
-          <button class="view-btn active" id="viewGrid" onclick="setView('grid')" title="Grid">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-            </svg>
-          </button>
-          <button class="view-btn" id="viewTable" onclick="setView('table')" title="Table">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="8" y1="6" x2="21" y2="6" />
-              <line x1="8" y1="12" x2="21" y2="12" />
-              <line x1="8" y1="18" x2="21" y2="18" />
-              <line x1="3" y1="6" x2="3.01" y2="6" />
-              <line x1="3" y1="12" x2="3.01" y2="12" />
-              <line x1="3" y1="18" x2="3.01" y2="18" />
-            </svg>
-          </button>
-        </div>
-      </div>
+      </aside>
 
-      <!-- Content -->
-      <div id="content"></div>
-    </main>
+      <!-- Sidebar overlay (mobile) -->
+      <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+      <main class="main-content" id="mainContent">
+        <!-- Group home (shown when no group selected) -->
+        <div id="groupHome" style="display:none">
+          <div class="group-home-grid" id="groupHomeGrid"></div>
+        </div>
+
+        <div id="itemView" style="display: none;">
+          <!-- Stats -->
+          <div class="stats">
+            <div class="stat-item" id="statItemTotal" onclick="filterByStat('')">
+              <span class="stat-label" id="labelStatTotal">Total Items</span>
+              <span class="stat-value" id="statTotal">—</span>
+            </div>
+            <div class="stat-item stat-item-clickable" id="statItemOwned" onclick="filterByStat('owned')">
+              <span class="stat-label" id="labelStatOwned">My Owned</span>
+              <span class="stat-value" id="statOwned">—</span>
+            </div>
+            <div class="stat-item stat-item-clickable" id="statItemWishlist" onclick="filterByStat('wishlist')">
+              <span class="stat-label" id="labelStatWishlist">My Wishlist</span>
+              <span class="stat-value" id="statWishlist">—</span>
+            </div>
+          </div>
+          <!-- Controls -->
+          <div class="controls">
+            <div class="search-wrap">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input type="text" id="searchInput" class="search-input">
+            </div>
+            <select id="statusFilter" class="filter-select" style="display:none">
+              <option value="">All statuses</option>
+              <option value="owned">Owned</option>
+              <option value="wishlist">Wishlist</option>
+              <option value="none">Not tracked</option>
+            </select>
+            <select id="typeFilter" class="filter-select">
+              <option value="">All types</option>
+            </select>
+            <select id="liverFilter" class="filter-select">
+              <option value="">All livers</option>
+            </select>
+            <div class="view-toggle">
+              <button class="view-btn active" id="viewGrid" onclick="setView('grid')" title="Grid">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                </svg>
+              </button>
+              <button class="view-btn" id="viewTable" onclick="setView('table')" title="Table">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="8" y1="6" x2="21" y2="6" />
+                  <line x1="8" y1="12" x2="21" y2="12" />
+                  <line x1="8" y1="18" x2="21" y2="18" />
+                  <line x1="3" y1="6" x2="3.01" y2="6" />
+                  <line x1="3" y1="12" x2="3.01" y2="12" />
+                  <line x1="3" y1="18" x2="3.01" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Content -->
+          <div id="content"></div>
+      </main>
+    </div>
   </div>
+
+
+
 
   <!-- ── Auth modal ─────────────────────────────────────── -->
   <div class="modal-overlay" id="authOverlay">
@@ -301,7 +333,8 @@
               <label id="labelFChekiMembers">Members</label>
               <!-- [CHANGED] tag picker populated from liver registry -->
               <div class="member-picker" id="memberPicker"></div>
-              <div style="font-size:.72rem;color:var(--muted);margin-top:.35rem">Type to search · select from dropdown ·
+              <div style="font-size:.72rem;color:var(--muted);margin-top:.35rem">Type to search · select from dropdown
+                ·
                 Backspace
                 to remove last</div>
               <!-- hidden input still holds comma list for saveItem() -->
@@ -336,8 +369,10 @@
       </div>
       <div class="modal-body" style="padding:0">
         <!-- Add new liver row -->
-        <div style="display:flex;gap:8px;padding:1rem 1.5rem;border-bottom:1px solid var(--border);align-items:center;">
+        <div
+          style="display:flex;gap:8px;padding:1rem 1.5rem;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap;">
           <input type="text" id="newLiverName" placeholder="Liver name…" style="flex:1">
+          <input type="text" id="newLiverGroup" placeholder="Group (e.g. Speciale)…" style="flex:2;min-width:120px;">
           <input type="color" id="newLiverColor" value="#4a90d9"
             style="width:40px;height:36px;border-radius:6px;border:1px solid var(--border);cursor:pointer;padding:2px;">
           <button class="btn btn-primary btn-sm" onclick="addLiver()">Add</button>
