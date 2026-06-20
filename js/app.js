@@ -488,9 +488,10 @@ async function saveItem() {
     cheki_variants:  isCheki ? parseList(document.getElementById('fChekiVariants').value) : null, // [NEW]
   };
 
-  const { error } = editingId
-    ? await sb.from('merch').update(payload).eq('id', editingId)
-    : await sb.from('merch').insert(payload);
+  let resultId = editingId;
+  const { data, error } = editingId
+    ? await sb.from('merch').update(payload).eq('id', editingId).select().maybeSingle()
+    : await sb.from('merch').insert(payload).select().maybeSingle();
 
   setSaveLoading(false);
   if (error) { toast(t('saveError') + ': ' + error.message, true); return; }
