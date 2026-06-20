@@ -473,31 +473,106 @@ async function deleteItem(id) {
   await loadMerch();
 }
 
+// [2026-06-19 #1] CSV columns in fixed order — must match parseCsvRow()
+const CSV_COLUMNS = ['id','liver','series','type','release_date','cost','currency','image','cheki_members','cheki_variants'];
+
+// [2026-06-19 #1] Escape a single CSV field — wraps in quotes if it contains comma/quote/newline
+function csvEscape(val) {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  if (/[",\n]/.test(str)) return '"' + str.replace(/"/g, '""') + '"';
+  return str;
+}
+
+// [2026-06-19 #1] Convert array fields (cheki_members/variants) to semicolon-separated string
+function arrToCell(arr) {
+  return Array.isArray(arr) ? arr.join(';') : '';
+}
+
+// [2026-06-19 #1] Convert semicolon-separated string back to array (or null if empty)
+function cellToArr(str) {
+  const trimmed = (str || '').trim();
+  if (!trimmed) return null;
+  return trimmed.split(';').map(s => s.trim()).filter(Boolean);
+}
+
+// [2026-06-19 #1] Export all merch items as a downloadable CSV file
 function exportJson() {
-  const blob = new Blob([JSON.stringify(allItems, null, 2)], { type: 'application/json' });
+  const header = CSV_COLUMNS.join(',');
+  const rows = allItems.map(item => CSV_COLUMNS.map(col => {
+    if (col === 'cheki_members')  return csvEscape(arrToCell(item.cheki_members));
+    if (col === 'cheki_variants') return csvEscape(arrToCell(item.cheki_variants));
+    return csvEscape(item[col]);
+  }).join(','));
+
+  const csv  = [header, ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  a.href = url; a.download = 'merch.json'; a.click();
+  a.href = url; a.download = 'merch.csv'; a.click();
   URL.revokeObjectURL(url);
   toast(t('exportedMsg'));
 }
 
-function importJson(file) {
+// [2026-06-19 #1] Parse a single CSV line into fields, respecting quoted commas
+function parseCsvLine(line) {
+  const fields = [];
+  let cur = '', inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { cur += c; }
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { fields.push(cur); cur = ''; }
+      else cur += c;
+    }
+  }
+  fields.push(cur);
+  return fields;
+}
+
+// [2026-06-19 #1] Import merch items from an uploaded CSV file
+function importCSV(file) {
   const reader = new FileReader();
   reader.onload = async e => {
     try {
-      const data = JSON.parse(e.target.result);
-      if (!Array.isArray(data)) throw new Error();
-      const { error } = await sb.from('merch').upsert(data);
+      const text  = e.target.result.replace(/\r\n/g, '\n').trim();
+      const lines = text.split('\n').filter(l => l.length > 0);
+      if (lines.length < 2) throw new Error('CSV has no data rows');
+
+      const headerCols = parseCsvLine(lines[0]).map(h => h.trim());
+      const rows = lines.slice(1).map(line => {
+        const fields = parseCsvLine(line);
+        const obj = {};
+        headerCols.forEach((col, i) => {
+          let val = fields[i] !== undefined ? fields[i] : '';
+          if (col === 'cheki_members' || col === 'cheki_variants') {
+            obj[col] = cellToArr(val);
+          } else if (col === 'cost') {
+            obj[col] = val === '' ? 0 : parseFloat(val);
+          } else if (col === 'id') {
+            if (val !== '') obj[col] = parseInt(val, 10);
+          } else if (col === 'release_date') {
+            obj[col] = val === '' ? null : val;
+          } else {
+            obj[col] = val;
+          }
+        });
+        return obj;
+      });
+
+      const { error } = await sb.from('merch').upsert(rows);
       if (error) throw error;
       await loadMerch();
-      toast(data.length + ' ' + t('importedMsg'));
-    } catch (err) {
-      toast(t('importError') + ': ' + (err.message || ''), true);
-    }
+      toast(rows.length + ' ' + t('importedMsg'));
+    } catch (err) { toast(t('importError') + ': ' + (err.message || ''), true); }
   };
   reader.readAsText(file);
 }
+
 
 /* ══════════════════════════════════════════════════════
    LIVER REGISTRY (superuser) — [NEW]
@@ -1202,7 +1277,7 @@ function bindEvents() {
   document.getElementById('fType').addEventListener('change', toggleChekiFields);
 
   document.getElementById('importFileInput').addEventListener('change', e => {
-    if (e.target.files[0]) importJson(e.target.files[0]);
+    if (e.target.files[0]) importCSV(e.target.files[0]);
     e.target.value = '';
   });
 
