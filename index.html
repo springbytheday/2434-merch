@@ -47,11 +47,18 @@
         <div class="header-user" id="headerUser" style="display:none">
           <span id="headerUsername"></span>
           <span class="superuser-badge" id="superBadge" style="display:none"></span>
+          <span class="superuser-badge admin-badge" id="adminBadge" style="display:none"></span>
         </div>
-
-        <!-- Superuser actions -->
         <button class="btn btn-ghost btn-sm" id="btnRegistry" style="display:none" onclick="openRegistry()">
           🎨 <span id="btnRegistryLabel">Liver Registry</span>
+        </button>
+        <!-- Owner-only: manage admins -->
+        <button class="btn btn-ghost btn-sm" id="btnUsers" style="display:none" onclick="openUsersModal()">
+          👤 <span id="btnUsersLabel">Manage Users</span>
+        </button>
+        <!-- Owner-only: view audit log -->
+        <button class="btn btn-ghost btn-sm" id="btnAuditLog" style="display:none" onclick="openAuditLog()">
+          📋 <span id="btnAuditLogLabel">Audit Log</span>
         </button>
         <button class="btn btn-ghost" id="btnImport" style="display:none"
           onclick="document.getElementById('importFileInput').click()">
@@ -379,6 +386,49 @@
         </div>
         <!-- List -->
         <div id="registryList" style="max-height:400px;overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Manage Users modal (owner only) — [2026-06-19 #11] ── -->
+  <div class="modal-overlay" id="usersOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">👤 Manage Users</span>
+        <button class="modal-close" onclick="closeUsersModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" style="padding:0">
+        <div style="display:flex;gap:8px;padding:1rem 1.5rem;border-bottom:1px solid var(--border);align-items:center;">
+          <input type="text" id="userSearchInput" placeholder="Enter username to promote to admin…" style="flex:1;">
+          <button class="btn btn-primary btn-sm" onclick="searchAndPromote()">Promote</button>
+        </div>
+        <div style="padding:.75rem 1.5rem;font-size:.72rem;color:var(--muted);border-bottom:1px solid var(--border);">
+          Current admins (besides you):
+        </div>
+        <div id="usersList" style="max-height:350px;overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Audit Log modal (owner only) — [2026-06-19 #11] ── -->
+  <div class="modal-overlay" id="auditOverlay">
+    <div class="modal" style="max-width:680px;">
+      <div class="modal-header">
+        <span class="modal-title">📋 Audit Log</span>
+        <button class="modal-close" onclick="closeAuditLog()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" style="padding:0">
+        <div id="auditList" style="max-height:500px;overflow-y:auto;"></div>
       </div>
     </div>
   </div>

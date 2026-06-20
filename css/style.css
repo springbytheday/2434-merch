@@ -146,6 +146,46 @@ body {
   border-radius: 999px;
 }
 
+/* [2026-06-19 #12] Distinct color for admin vs owner badge */
+.admin-badge {
+  background: #e8edf3;
+  color: #2d4a6b;
+}
+
+/* [2026-06-19 #12] Audit log entries */
+.audit-row {
+  padding: .75rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: .82rem;
+}
+.audit-row:last-child { border-bottom: none; }
+.audit-row-top {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.audit-action {
+  font-size: .65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  border: 1px solid currentColor;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.audit-time {
+  margin-left: auto;
+  font-size: .72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.audit-row-detail {
+  margin-top: .3rem;
+  font-size: .78rem;
+  color: var(--muted);
+}
+
 main {
   max-width: 1200px;
   margin: 0 auto;

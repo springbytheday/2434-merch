@@ -9,7 +9,8 @@ window._sb = sb;
 
 /* ── App state ────────────────────────────────────────── */
 let currentUser  = null;   // null = logged out (guest)
-let isSuperuser  = false;
+let isSuperuser = false;
+let isAdmin        = false; // true if user has admin role (granted by owner)
 let allItems = [];
 let liverRegistry  = {};   // { name: { color, group_name } }
 let userStatuses = {};     // only populated when logged in
@@ -21,6 +22,12 @@ let currentGroup   = null; // [2026-06-18 #9] currently selected group name
 const TYPE_OPTIONS     = ['Acrylic Stand','Cheki Card','Plushie','Tapestry','Keychain','Pin Badge','Trading Card','Fan Book','Voice Pack','Other'];
 const CURRENCY_OPTIONS = ['JPY', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'SGD', 'TWD', 'KRW'];
 const DEFAULT_LIVER_COLOR = '#8a8780'; // fallback dot color
+
+// [2026-06-19 #4] True if user can add/edit/delete merch & livers (owner or admin)
+function canManage() {
+  return isSuperuser || isAdmin;
+}
+
 
 /* ══════════════════════════════════════════════════════
    BOOTSTRAP 
@@ -126,7 +133,7 @@ async function onSignedIn(user) {
     || user.email.replace('@speciale.co', '');
   isSuperuser = user.email === usernameToEmail(SUPERUSER_USERNAME);
 
-await Promise.all([loadUserStatuses(), loadChekiStatuses()]); // added loadChekiStatuses()
+await Promise.all([loadUserStatuses(), loadChekiStatuses(),loadMyRole()]); // added loadChekiStatuses()
   applyHeaderLoggedIn();
   closeAuthModal();
   render();
@@ -134,12 +141,22 @@ await Promise.all([loadUserStatuses(), loadChekiStatuses()]); // added loadCheki
 
 function onSignedOut() {
   currentUser  = null;
-  isSuperuser  = false;
+  isSuperuser = false;
+  isAdmin       = false;
   userStatuses = {};
-  chekiStatuses = {}; // [NEW] reset cheki statuses on sign out
+  chekiStatuses = {}; // reset cheki statuses on sign out
   applyHeaderLoggedOut();
   render();
 }
+
+// Look up the current user's role from user_roles table
+async function loadMyRole() {
+  if (isSuperuser) { isAdmin = false; return; } // owner doesn't need admin flag
+  const { data, error } = await sb.from('user_roles').select('role').eq('user_id', currentUser.id).maybeSingle();
+  if (error || !data) { isAdmin = false; return; }
+  isAdmin = data.role === 'admin';
+}
+
 
 /* ══════════════════════════════════════════════════════
    DATA
@@ -428,7 +445,22 @@ function showNoteSaved(itemId) {
   el._hideTimer = setTimeout(() => { el.style.opacity = '0'; }, 1500);
 }
 
-/* ── Superuser: add / edit / delete ──────────────────── */
+// Write an entry to audit_log. Fire-and-forget — never blocks the UI on failure.
+async function logAudit(action, tableName, recordId, details) {
+  if (!currentUser) return;
+  try {
+    await sb.from('audit_log').insert({
+      user_id:    currentUser.id,
+      username:   currentUser.username,
+      action,            // 'create' | 'update' | 'delete'
+      table_name: tableName,
+      record_id:  recordId,
+      details,
+    });
+  } catch (e) { /* audit log failures should never break the main action */ }
+}
+
+/* ── Owner/Admin: CRUD ──────────────────── */
 
 async function saveItem() {
   const series = document.getElementById('fSeries').value.trim();
@@ -455,6 +487,10 @@ async function saveItem() {
   setSaveLoading(false);
   if (error) { toast(t('saveError') + ': ' + error.message, true); return; }
 
+  // Log this create/update to audit_log
+  if (data) resultId = data.id;
+  logAudit(editingId ? 'update' : 'create', 'merch', resultId, payload);
+
   toast(editingId ? t('updatedMsg') : t('addedMsg'));
   closeModal();
   await loadMerch();
@@ -467,8 +503,10 @@ function parseList(str) {
 
 async function deleteItem(id) {
   if (!confirm(t('deleteConfirm'))) return;
+  const itemBeingDeleted = allItems.find(i => i.id === id); // capture for log details
   const { error } = await sb.from('merch').delete().eq('id', id);
   if (error) { toast(t('deleteError') + ': ' + error.message, true); return; }
+  logAudit('delete', 'merch', id, itemBeingDeleted);
   toast(t('deletedMsg'));
   await loadMerch();
 }
@@ -618,6 +656,7 @@ async function addLiver() {
   const { error } = await sb.from('livers').upsert({ name, color, group_name: group }, { onConflict: 'name' });
   if (error) { toast('Failed to add liver', true); return; }
   liverRegistry[name] = { color, group_name: group };
+  logAudit('create', 'livers', null, { name, color, group_name: group });
   document.getElementById('newLiverName').value  = '';
   document.getElementById('newLiverGroup').value = '';
   renderRegistryModal();
@@ -630,7 +669,10 @@ async function updateLiverColor(name, color) {
   liverRegistry[name] = { ...liverRegistry[name], color };
   const { error } = await sb.from('livers').update({ color }).eq('name', name);
   if (error) toast('Failed to update color', true);
-  else { renderRegistryModal(); render(); }
+  else {
+    logAudit('update', 'livers', null, { name, color });
+    renderRegistryModal(); render();
+  }
 }
 
 // New function to update a liver's group
@@ -639,7 +681,10 @@ async function updateLiverGroup(name, group_name) {
   liverRegistry[name] = { ...liverRegistry[name], group_name: val };
   const { error } = await sb.from('livers').update({ group_name: val }).eq('name', name);
   if (error) toast('Failed to update group', true);
-  else { renderRegistryModal(); renderSidebar(); renderGroupHome(); render(); }
+  else {
+    logAudit('update', 'livers', null, { name, group_name: val });
+    renderRegistryModal(); renderSidebar(); renderGroupHome(); render();
+  }
 }
 
  
@@ -647,11 +692,129 @@ async function deleteLiver(name) {
   if (!confirm(`Remove ${name} from registry?`)) return;
   const { error } = await sb.from('livers').delete().eq('name', name);
   if (error) { toast('Failed to delete', true); return; }
+  logAudit('delete', 'livers', null, { name, ...liverBeingDeleted });
   delete liverRegistry[name];
   renderRegistryModal();
   renderSidebar();
   render();
 }
+/* ══════════════════════════════════════════════════════
+   MANAGE USERS (owner only) — [2026-06-19 #8]
+   Lets the owner promote/demote other accounts to admin.
+   ══════════════════════════════════════════════════════ */
+function openUsersModal() {
+  document.getElementById('usersOverlay').classList.add('open');
+  loadAndRenderUsers();
+}
+function closeUsersModal() {
+  document.getElementById('usersOverlay').classList.remove('open');
+}
+
+// [2026-06-19 #8] Fetch all known users (from user_roles) plus search-by-username
+async function loadAndRenderUsers() {
+  const list = document.getElementById('usersList');
+  list.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>`;
+
+  // user_roles only contains rows for users who have ever been assigned a role.
+  // To promote a brand-new user we look them up by username via the search box instead.
+  const { data, error } = await sb.from('user_roles').select('user_id, role');
+  if (error) { list.innerHTML = `<div style="padding:1rem;color:var(--danger);font-size:.85rem">Failed to load users</div>`; return; }
+
+  if (!data || !data.length) {
+    list.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--muted);font-size:.85rem">No admins yet — search a username below to promote them</div>`;
+    return;
+  }
+
+  // We don't have a direct users table to join against from the client,
+  // so we display by user_id and role; username resolution happens via search.
+  list.innerHTML = data.map(row => `
+    <div class="registry-row">
+      <span style="font-size:.8rem;color:var(--muted);font-family:monospace;">${row.user_id.slice(0,8)}…</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="superuser-badge">${row.role}</span>
+        <button class="btn btn-danger btn-sm" onclick="setUserRole('${row.user_id}', 'user')">Demote</button>
+      </div>
+    </div>`).join('');
+}
+
+// [2026-06-19 #8] Search a user by username (calls a Postgres function — see SQL note)
+async function searchAndPromote() {
+  const username = document.getElementById('userSearchInput').value.trim();
+  if (!username) return;
+
+  // Look up the auth user id by username via RPC (requires a SQL function — see below)
+  const { data, error } = await sb.rpc('get_user_id_by_username', { search_username: username });
+  if (error || !data) { toast('User not found', true); return; }
+
+  await setUserRole(data, 'admin');
+  document.getElementById('userSearchInput').value = '';
+}
+
+// [2026-06-19 #8] Promote/demote a user — upserts into user_roles
+async function setUserRole(userId, role) {
+  const { error } = await sb.from('user_roles').upsert({ user_id: userId, role }, { onConflict: 'user_id' });
+  if (error) { toast('Failed to update role', true); return; }
+  toast(role === 'admin' ? 'Promoted to admin' : 'Demoted to user');
+  loadAndRenderUsers();
+}
+
+/* ══════════════════════════════════════════════════════
+   AUDIT LOG (owner only) — [2026-06-19 #8]
+   ══════════════════════════════════════════════════════ */
+function openAuditLog() {
+  document.getElementById('auditOverlay').classList.add('open');
+  loadAndRenderAuditLog();
+}
+function closeAuditLog() {
+  document.getElementById('auditOverlay').classList.remove('open');
+}
+
+async function loadAndRenderAuditLog() {
+  const list = document.getElementById('auditList');
+  list.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>`;
+
+  const { data, error } = await sb
+    .from('audit_log')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200);
+
+  if (error) { list.innerHTML = `<div style="padding:1rem;color:var(--danger);font-size:.85rem">Failed to load audit log</div>`; return; }
+  if (!data || !data.length) { list.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--muted);font-size:.85rem">No activity logged yet</div>`; return; }
+
+  const actionColors = { create: 'var(--owned)', update: '#7a6030', delete: 'var(--danger)' };
+
+  list.innerHTML = data.map(entry => {
+    const when = new Date(entry.created_at).toLocaleString();
+    const color = actionColors[entry.action] || 'var(--muted)';
+    const summary = summarizeAuditDetails(entry);
+    return `
+      <div class="audit-row">
+        <div class="audit-row-top">
+          <span class="audit-action" style="color:${color};border-color:${color}">${entry.action}</span>
+          <strong>${entry.username}</strong>
+          <span style="color:var(--muted)">→</span>
+          <span>${entry.table_name}${entry.record_id ? ` #${entry.record_id}` : ''}</span>
+          <span class="audit-time">${when}</span>
+        </div>
+        ${summary ? `<div class="audit-row-detail">${summary}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+// [2026-06-19 #8] Build a short human-readable summary of what changed
+function summarizeAuditDetails(entry) {
+  if (!entry.details) return '';
+  const d = entry.details;
+  if (entry.table_name === 'merch') {
+    return `${d.liver || ''} ${d.series ? '· ' + d.series : ''} ${d.type ? '· ' + d.type : ''}`.trim();
+  }
+  if (entry.table_name === 'livers') {
+    return `${d.name || ''}${d.group_name ? ' · group: ' + d.group_name : ''}`;
+  }
+  return '';
+}
+
 
 /* ══════════════════════════════════════════════════════
    RENDER
@@ -714,10 +877,13 @@ function getFiltered() {
 }
 
 function updateStats() {
-  const myOwned    = allItems.filter(i => (userStatuses[i.id]?.status) === 'owned');
-  const myWishlist = allItems.filter(i => (userStatuses[i.id]?.status) === 'wishlist');
+    const groupItems = currentGroup
+    ? allItems.filter(i => itemBelongsToGroup(i, currentGroup))
+    : allItems;
+  const myOwned    = groupItems.filter(i => (userStatuses[i.id]?.status) === 'owned');
+  const myWishlist = groupItems.filter(i => (userStatuses[i.id]?.status) === 'wishlist');
  
-  document.getElementById('statTotal').textContent    = allItems.length;
+  document.getElementById('statTotal').textContent    = groupItems.length;
   document.getElementById('statOwned').textContent    = currentUser ? myOwned.length    : '—';
   document.getElementById('statWishlist').textContent = currentUser ? myWishlist.length : '—';
  
@@ -1147,11 +1313,21 @@ function applyHeaderLoggedIn() {
   document.getElementById('btnSignOut').style.display   = '';
   document.getElementById('statusFilter').style.display = '';
   document.getElementById('headerUsername').textContent = currentUser.username;
+
+  // [2026-06-19 #7] Owner badge vs Admin badge
   document.getElementById('superBadge').style.display   = isSuperuser ? '' : 'none';
-  document.getElementById('btnAdd').style.display       = isSuperuser ? '' : 'none';
-  document.getElementById('btnImport').style.display    = isSuperuser ? '' : 'none';
-  document.getElementById('btnExport').style.display = isSuperuser ? '' : 'none';
-  document.getElementById('btnRegistry').style.display  = isSuperuser ? '' : 'none'; 
+  document.getElementById('adminBadge').style.display = (!isSuperuser && isAdmin) ? '' : 'none';
+  
+  // [2026-06-19 #7] canManage() covers both owner and admin
+  document.getElementById('btnAdd').style.display       = canManage() ? '' : 'none';
+  document.getElementById('btnImport').style.display    = canManage() ? '' : 'none';
+  document.getElementById('btnExport').style.display    = canManage() ? '' : 'none';
+  document.getElementById('btnRegistry').style.display = canManage() ? '' : 'none';
+  
+  // [2026-06-19 #7] Owner-only: manage admins and view audit log
+  document.getElementById('btnUsers').style.display     = isSuperuser ? '' : 'none';
+  document.getElementById('btnAuditLog').style.display   = isSuperuser ? '' : 'none';
+
   // Re-apply translated strings that vary by login state
   document.getElementById('superBadge').textContent     = t('ownerBadge');
   document.getElementById('btnAdd').textContent         = t('addItem');
@@ -1167,11 +1343,14 @@ function applyHeaderLoggedOut() {
   document.getElementById('headerUser').style.display   = 'none';
   document.getElementById('btnSignOut').style.display   = 'none';
   document.getElementById('statusFilter').style.display = 'none';
-  document.getElementById('superBadge').style.display   = 'none';
+  document.getElementById('superBadge').style.display = 'none';
+  document.getElementById('adminBadge').style.display   = 'none'; // [2026-06-19 #7]
   document.getElementById('btnAdd').style.display       = 'none';
   document.getElementById('btnImport').style.display    = 'none';
   document.getElementById('btnExport').style.display = 'none';
-  document.getElementById('btnRegistry').style.display  = 'none';
+  document.getElementById('btnRegistry').style.display = 'none';
+  document.getElementById('btnUsers').style.display      = 'none'; // [2026-06-19 #7]
+  document.getElementById('btnAuditLog').style.display   = 'none'; // [2026-06-19 #7]
   document.getElementById('btnSignIn').textContent      = t('signIn');
   document.getElementById('btnSignUp').textContent = t('createAccount');
   document.getElementById('statItemOwned').classList.remove('stat-item-clickable', 'active');

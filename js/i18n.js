@@ -9,21 +9,25 @@ const STRINGS = {
     createAccount:   'Create account',
     signOut:         'Sign out',
     ownerBadge:      'Owner',
+    adminBadge:      'Admin',
     addItem:         'Add Item',
     import:          'Import',
     export:          'Export',
+    manageUsers:     'Manage Users',
+    auditLog:        'Audit Log',
 
     /* ── Stats ── */
     statTotal:       'Total Items',
     statOwned:       'My Owned',
     statWishlist:    'My Wishlist',
-    statGroups:      'Groups',
+    statGroups:      'Livers',
     statSpent:       'My Total Spent',
 
     /* ── Filters ── */
     searchPlaceholder: 'Search by liver, series…',
     allStatuses:     'All statuses',
     allTypes:        'All types',
+    allSeries:       'All series',
     allLivers:       'All livers',
     filterOwned:     'My Owned',
     filterWishlist:  'My Wishlist',
@@ -47,29 +51,28 @@ const STRINGS = {
     colStatus:       'My Status',
     colCost:         'Cost',
     edit:            'Edit',
-    delete: 'Delete',
-    notesPlaceholder: 'Notes here',
-    noteSaved:'Notes Saved',
+    delete:          'Delete',
 
     /* ── Add/Edit modal ── */
     addMerch:        'Add Merch',
     editMerch:       'Edit Merch',
     labelImage:      'Image URL or relative path',
     imageTip:        'Put images in the images/ folder and reference as ./images/filename.jpg',
-    labelLiver:      'Liver*',
+    labelLiver:      'Liver (Vtuber Name) *',
     liverPlaceholder:'e.g. Nagisa Trout',
-    labelSeries:     'Series',
-    seriesPlaceholder:'e.g. Debut',
+    labelSeries:     'Series / Agency',
+    seriesPlaceholder:'e.g. Nijisanji',
     labelType:       'Item Type',
     labelCost:       'Cost',
     labelCurrency:   'Currency',
+    labelReleaseDate:'Release Date',
     cancel:          'Cancel',
     save:            'Save',
     saving:          'Saving…',
 
     /* ── Auth modal ── */
     authTitle:       'MerchArchive',
-    authSubtitle:    'Track your speciale merch collection',
+    authSubtitle:    'Track your vtuber merch collection',
     tabLogin:        'Sign In',
     tabSignup:       'Create Account',
     labelUsername:   'Username',
@@ -96,6 +99,17 @@ const STRINGS = {
     updatedMsg:      'Item updated',
     deletedMsg:      'Item deleted',
     deleteConfirm:   'Delete this item? This cannot be undone.',
+
+    /* ── Cheki ── */
+    total:              'Total',
+    notesPlaceholder:   'Your notes…',
+    noteSaved:          '✓ Saved',
+    noteError:          'Failed to save note',
+    labelChekiMembers:  'Members (comma separated)',
+    labelChekiVariants: 'Variants (comma separated)',
+
+    /* ── Registry ── */
+    registry:           'Liver Registry',
 
     /* ── Auth errors ── */
     errUsernameEmpty:    'Please enter a username.',
@@ -135,22 +149,26 @@ const STRINGS = {
     createAccount:   'アカウント作成',
     signOut:         'ログアウト',
     ownerBadge:      'オーナー',
+    adminBadge:      '管理者',
     addItem:         '追加',
     import:          'インポート',
     export:          'エクスポート',
+    manageUsers:     'ユーザー管理',
+    auditLog:        '操作ログ',
 
     /* ── Stats ── */
     statTotal:       '総数',
     statOwned:       '持ってる',
     statWishlist:    '欲しいもの',
-    statGroups:      'グループ',
+    statGroups:      'ライバー',
     statSpent:       '合計金額',
 
     /* ── Filters ── */
     searchPlaceholder: 'ライバー名・シリーズで検索…',
     allStatuses:     'すべてのステータス',
     allTypes:        'すべての種類',
-    allLivers:       'すべてのライバ',
+    allSeries:       'すべてのシリーズ',
+    allLivers:       'すべてのライバー',
     filterOwned:     '持ってる',
     filterWishlist:  '欲しいもの',
     filterUntracked: '未登録',
@@ -173,22 +191,21 @@ const STRINGS = {
     colStatus:       'ステータス',
     colCost:         '値段',
     edit:            '編集',
-    delete: '削除',
-    notesPlaceholder: 'ここにメモ',
-    noteSaved:'メモ保存',
+    delete:          '削除',
 
     /* ── Add/Edit modal ── */
     addMerch:        'グッズ追加',
     editMerch:       'グッズ編集',
     labelImage:      '画像URLまたはパス',
     imageTip:        'images/ フォルダに置いて ./images/ファイル名.jpg で参照できるよ',
-    labelLiver:      'ライバー名',
-    liverPlaceholder:'例: 渚トラウト',
-    labelSeries:     'シリーズ *',
-    seriesPlaceholder:'例: デビュー',
+    labelLiver:      'ライバー名 *',
+    liverPlaceholder:'例: 魚尾ナギサ',
+    labelSeries:     'シリーズ / 事務所',
+    seriesPlaceholder:'例: にじさんじ',
     labelType:       '種類',
     labelCost:       '値段',
     labelCurrency:   '通貨',
+    labelReleaseDate:'発売日',
     cancel:          'キャンセル',
     save:            '保存',
     saving:          '保存中…',
@@ -222,6 +239,17 @@ const STRINGS = {
     updatedMsg:      '更新したよ',
     deletedMsg:      '削除したよ',
     deleteConfirm:   'このアイテムを削除する？元に戻せないよ。',
+
+    /* ── Cheki ── */
+    total:              '合計',
+    notesPlaceholder:   'メモを入力…',
+    noteSaved:          '✓ 保存済み',
+    noteError:          'メモの保存に失敗したよ',
+    labelChekiMembers:  'メンバー（カンマ区切り）',
+    labelChekiVariants: 'バリエーション（カンマ区切り）',
+
+    /* ── Registry ── */
+    registry:           'ライバー登録',
 
     /* ── Auth errors ── */
     errUsernameEmpty:    'ユーザー名を入力してね。',
@@ -316,16 +344,18 @@ function applyStaticStrings() {
   set('btnSignUp',    t('createAccount'));
   set('btnSignOut',   t('signOut'));
   set('superBadge',   t('ownerBadge'));
+  set('adminBadge',   t('adminBadge'));    // [2026-06-19 #14]
   set('btnAdd',       t('addItem'));
   set('btnImport',    t('import'));
   set('btnExport',    t('export'));
+  set('btnUsersLabel',    t('manageUsers')); // [2026-06-19 #14]
+  set('btnAuditLogLabel', t('auditLog'));    // [2026-06-19 #14]
 
   // Stats
   set('labelStatTotal',    t('statTotal'));
   set('labelStatOwned',    t('statOwned'));
   set('labelStatWishlist', t('statWishlist'));
   set('labelStatGroups',   t('statGroups'));
-  set('labelStatSpent',    t('statSpent'));
 
   // Filters
   setPlaceholder('searchInput', t('searchPlaceholder'));
@@ -348,9 +378,9 @@ function applyStaticStrings() {
     });
   }
 
-  // Group filter first option
-  const gf = document.getElementById('groupFilter');
-  if (gf && gf.options[0]) gf.options[0].textContent = t('allSeries');
+  // Liver filter first option
+  const lf = document.getElementById('liverFilter');
+  if (lf && lf.options[0]) lf.options[0].textContent = t('allLivers');
 
   // Loading screen
   set('loadingText', t('loading'));
@@ -379,8 +409,12 @@ function applyStaticStrings() {
   set('labelFName',     t('labelLiver'));
   set('labelFGroup',    t('labelSeries'));
   set('labelFType',     t('labelType'));
-  set('labelFCost',     t('labelCost'));
-  set('labelFCurrency', t('labelCurrency'));
+  set('labelFCost',           t('labelCost'));
+  set('labelFCurrency',       t('labelCurrency'));
+  set('labelFReleaseDate',    t('labelReleaseDate'));
+  set('labelFChekiMembers',   t('labelChekiMembers'));
+  set('labelFChekiVariants',  t('labelChekiVariants'));
+  set('btnRegistryLabel',     t('registry'));
   set('cancelBtn',      t('cancel'));
   set('saveBtn',        t('save'));
   setPlaceholder('fName',  t('liverPlaceholder'));
