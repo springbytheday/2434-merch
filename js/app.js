@@ -282,6 +282,14 @@ function closeSidebar() {
   document.getElementById('sidebarOverlay').classList.remove('open');
 }
 
+// Toggle the mobile "More actions" dropdown
+function toggleHeaderOverflow() {
+  document.getElementById('headerOverflowGroup').classList.toggle('open');
+}
+function closeHeaderOverflow() {
+  document.getElementById('headerOverflowGroup').classList.remove('open');
+}
+
 // [NEW] Load liver name→color map from Supabase
 async function loadLiverRegistry() {
   const { data, error } = await sb.from('livers').select('name, color, group_name').order('name');
@@ -616,6 +624,7 @@ function importCSV(file) {
    LIVER REGISTRY (superuser) — [NEW]
    ══════════════════════════════════════════════════════ */
 function openRegistry() {
+  closeHeaderOverflow();
   renderRegistryModal();
   document.getElementById('registryOverlay').classList.add('open');
 }
@@ -703,6 +712,7 @@ async function deleteLiver(name) {
    Lets the owner promote/demote other accounts to admin.
    ══════════════════════════════════════════════════════ */
 function openUsersModal() {
+  closeHeaderOverflow();
   document.getElementById('usersOverlay').classList.add('open');
   loadAndRenderUsers();
 }
@@ -762,6 +772,7 @@ async function setUserRole(userId, role, username) {
    AUDIT LOG (owner only) — [2026-06-19 #8]
    ══════════════════════════════════════════════════════ */
 function openAuditLog() {
+  closeHeaderOverflow();
   document.getElementById('auditOverlay').classList.add('open');
   loadAndRenderAuditLog();
 }

@@ -30,61 +30,71 @@
         <span class="logo">2434 <span>Archive</span></span>
       </div>
       <div class="header-actions">
-
-        <!-- Language toggle 
+        <!-- Language Toggle
         <div class="view-toggle">
           <button class="view-btn active" id="langEN" onclick="setLang('en')">EN</button>
           <button class="view-btn" id="langJA" onclick="setLang('ja')">日本語</button>
-        </div> -->
-
-        <!-- Guest buttons -->
+        </div>-->
         <button class="btn btn-ghost btn-sm" id="btnSignIn" onclick="openAuthModal('login')"
           style="display:none"></button>
         <button class="btn btn-primary btn-sm" id="btnSignUp" onclick="openAuthModal('signup')"
           style="display:none"></button>
-
-        <!-- Logged-in user -->
         <div class="header-user" id="headerUser" style="display:none">
           <span id="headerUsername"></span>
           <span class="superuser-badge" id="superBadge" style="display:none"></span>
           <span class="superuser-badge admin-badge" id="adminBadge" style="display:none"></span>
         </div>
-        <button class="btn btn-ghost btn-sm" id="btnRegistry" style="display:none" onclick="openRegistry()">
-          🎨 <span id="btnRegistryLabel">Liver Registry</span>
-        </button>
-        <!-- Owner-only: manage admins -->
-        <button class="btn btn-ghost btn-sm" id="btnUsers" style="display:none" onclick="openUsersModal()">
-          👤 <span id="btnUsersLabel">Manage Users</span>
-        </button>
-        <!-- Owner-only: view audit log -->
-        <button class="btn btn-ghost btn-sm" id="btnAuditLog" style="display:none" onclick="openAuditLog()">
-          📋 <span id="btnAuditLogLabel">Audit Log</span>
-        </button>
-        <button class="btn btn-ghost" id="btnImport" style="display:none"
-          onclick="document.getElementById('importFileInput').click()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-          <span id="btnImportLabel"></span>
-        </button>
+
+        <!-- [2026-06-20 #1] Secondary management buttons — shown inline on desktop,
+           collapsed into a "More" dropdown on mobile via CSS (see .header-overflow) -->
+        <div class="header-overflow-group" id="headerOverflowGroup">
+          <button class="btn btn-ghost btn-sm" id="btnRegistry" style="display:none" onclick="openRegistry()">
+            🎨 <span id="btnRegistryLabel">Liver Registry</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" id="btnUsers" style="display:none" onclick="openUsersModal()">
+            👤 <span id="btnUsersLabel">Manage Users</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" id="btnAuditLog" style="display:none" onclick="openAuditLog()">
+            📋 <span id="btnAuditLogLabel">Audit Log</span>
+          </button>
+          <button class="btn btn-ghost" id="btnImport" style="display:none"
+            onclick="closeHeaderOverflow(); document.getElementById('importFileInput').click()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span id="btnImportLabel"></span>
+          </button>
+          <button class="btn btn-ghost" id="btnExport" style="display:none"
+            onclick="closeHeaderOverflow(); exportJson()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span id="btnExportLabel"></span>
+          </button>
+        </div>
         <input type="file" id="importFileInput" accept=".csv" style="display:none">
-        <button class="btn btn-ghost" id="btnExport" style="display:none" onclick="exportJson()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
+        <!-- [2026-06-19 #2] now accepts CSV instead of JSON -->
+
+        <!-- [2026-06-20 #1] Mobile-only "More" overflow trigger — toggles headerOverflowGroup -->
+        <button class="btn btn-ghost btn-sm header-more-btn" id="btnHeaderMore" onclick="toggleHeaderOverflow()"
+          aria-label="More actions">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" />
+            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+            <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none" />
           </svg>
-          <span id="btnExportLabel"></span>
         </button>
+
         <button class="btn btn-primary" id="btnAdd" style="display:none" onclick="openAdd()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
         </button>
-
         <button class="btn btn-ghost btn-sm" id="btnSignOut" style="display:none" onclick="handleLogout()"></button>
       </div>
     </header>

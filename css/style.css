@@ -128,6 +128,16 @@ body {
 }
 .logo span { color: var(--accent); }
 .header-actions { display: flex; gap: .75rem; align-items: center; }
+
+/* [2026-06-20 #2] Overflow group: inline flex row on desktop (default state) */
+.header-overflow-group {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+/* [2026-06-20 #2] "More" trigger hidden on desktop — only shown on mobile via media query below */
+.header-more-btn.header-more-btn { display: none; position: relative; }
+
 .header-user {
   font-size: .8rem;
   color: var(--muted);
@@ -968,5 +978,40 @@ tr:hover td { background: var(--bg); }
   .sidebar-overlay.open { display: block; }
 
   .main-content { padding: 1.5rem 1rem 3rem; }
+
+  /* [2026-06-20 #3] Collapse secondary header buttons into a dropdown panel */
+  .header-more-btn.header-more-btn  { display: flex; }
+
+  .header-overflow-group {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 1rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: .4rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    padding: .6rem;
+    min-width: 200px;
+    z-index: 110;
+  }
+  .header-overflow-group.open { display: flex; }
+  .header-overflow-group .btn {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  /* Hide the language toggle and username text to save space; sign-in/out and Add stay visible */
+  .site-header .view-toggle { display: none; }
+  .header-user span:not(.superuser-badge) { display: none; }
 }
+
+@media (max-width: 420px) {
+  .site-header { padding: 0 .75rem; }
+  .logo { font-size: 1.05rem; }
+}
+
 
