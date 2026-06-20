@@ -717,7 +717,7 @@ async function loadAndRenderUsers() {
 
   // user_roles only contains rows for users who have ever been assigned a role.
   // To promote a brand-new user we look them up by username via the search box instead.
-  const { data, error } = await sb.from('user_roles').select('user_id, role');
+  const { data, error } = await sb.from('user_roles').select('username, role, user_id').eq('role','admin');
   if (error) { list.innerHTML = `<div style="padding:1rem;color:var(--danger);font-size:.85rem">Failed to load users</div>`; return; }
 
   if (!data || !data.length) {
@@ -729,10 +729,10 @@ async function loadAndRenderUsers() {
   // so we display by user_id and role; username resolution happens via search.
   list.innerHTML = data.map(row => `
     <div class="registry-row">
-      <span style="font-size:.8rem;color:var(--muted);font-family:monospace;">${row.user_id.slice(0,8)}…</span>
+      <span style="font-size:.8rem;color:var(--muted);font-family:monospace;">${row.username}…</span>
       <div style="display:flex;align-items:center;gap:8px;">
         <span class="superuser-badge">${row.role}</span>
-        <button class="btn btn-danger btn-sm" onclick="setUserRole('${row.user_id}', 'user')">Demote</button>
+        <button class="btn btn-danger btn-sm" onclick="setUserRole('${row.user_id}', 'user','${row.username}')">Demote</button>
       </div>
     </div>`).join('');
 }
@@ -746,13 +746,13 @@ async function searchAndPromote() {
   const { data, error } = await sb.rpc('get_user_id_by_username', { search_username: username });
   if (error || !data) { toast('User not found', true); return; }
 
-  await setUserRole(data, 'admin');
+  await setUserRole(data, 'admin',username);
   document.getElementById('userSearchInput').value = '';
 }
 
 // [2026-06-19 #8] Promote/demote a user — upserts into user_roles
-async function setUserRole(userId, role) {
-  const { error } = await sb.from('user_roles').upsert({ user_id: userId, role }, { onConflict: 'user_id' });
+async function setUserRole(userId, role, username) {
+  const { error } = await sb.from('user_roles').upsert({ user_id: userId, role, username }, { onConflict: 'user_id' });
   if (error) { toast('Failed to update role', true); return; }
   toast(role === 'admin' ? 'Promoted to admin' : 'Demoted to user');
   loadAndRenderUsers();
